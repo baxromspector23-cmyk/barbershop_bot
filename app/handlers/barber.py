@@ -19,7 +19,7 @@ from app.i18n import t
 from app.keyboards.barber import get_barber_main_menu, get_barber_order_actions
 from app.keyboards.client import get_payment_methods_keyboard
 from app.keyboards.common import get_back_to_main_keyboard, get_role_main_menu
-from app.models.enums import OrderStatus, PaymentMethod, UserRole
+from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus, UserRole
 from app.models.user import User
 from app.repositories.barber_repo import BarberRepository
 from app.repositories.order_repo import OrderRepository
@@ -178,10 +178,11 @@ async def handle_b_done(call: CallbackQuery, session: AsyncSession, user: User, 
         await call.answer(t("barber.done_success", lang=lang, ticket_no=order.ticket_no))
         await call.message.delete()
 
-        # If order is completed and unpaid, prompt client with payment options
+        # If order is completed and unpaid, prompt client with payment options;
+        # if already paid, send thank-you/receipt only without payment keyboard
         payment_repo = PaymentRepository(session)
         payment = await payment_repo.get_by_order_id(order.id)
-        if not payment or payment.status != PaymentMethod.CASH.value:
+        if not payment or payment.status != PaymentStatus.PAID.value:
             if order.client:
                 pay_prompt = t(
                     "client.service_completed_pay_prompt",
@@ -193,6 +194,17 @@ async def handle_b_done(call: CallbackQuery, session: AsyncSession, user: User, 
                     chat_id=order.client.telegram_id,
                     text=pay_prompt,
                     reply_markup=markup,
+                )
+        else:
+            if order.client:
+                receipt_text = t(
+                    "client.service_completed_receipt",
+                    lang=order.client.language,
+                    amount=order.price,
+                )
+                await bot.send_message(
+                    chat_id=order.client.telegram_id,
+                    text=receipt_text,
                 )
 
 

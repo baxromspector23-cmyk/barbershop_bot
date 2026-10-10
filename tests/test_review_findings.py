@@ -142,6 +142,44 @@ async def test_f1_prepaid_client_no_repay(
             assert not has_pay_method, "Prepaid client received pay_method keyboard!"
 
 
+@pytest.mark.asyncio
+async def test_f1_pay_after_client_gets_keyboard(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M1 acceptance: pay-after client still gets the payment keyboard."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    service = sample_barber.services[0]
+    client = sample_clients[0]
+
+    order = await qs.join_queue(sample_barber.id, service.id, client, pay_now=False)
+    await qs.client_arrived(order.id)
+    await db_session.commit()
+
+    bot = MagicMock()
+    bot.send_message = AsyncMock()
+
+    call = MagicMock()
+    call.data = f"b_done:{order.id}"
+    call.answer = AsyncMock()
+    call.message = MagicMock()
+    call.message.delete = AsyncMock()
+
+    await handle_b_done(call, db_session, sample_barber.user, bot, "uz")
+
+    # Client MUST be sent the payment methods keyboard
+    found_keyboard = False
+    for call_args in bot.send_message.call_args_list:
+        kwargs = call_args.kwargs
+        reply_markup = kwargs.get("reply_markup")
+        if reply_markup and hasattr(reply_markup, "inline_keyboard"):
+            if any(
+                any(btn.callback_data and btn.callback_data.startswith("pay_method:") for btn in row)
+                for row in reply_markup.inline_keyboard
+            ):
+                found_keyboard = True
+    assert found_keyboard, "Pay-after client must receive payment methods keyboard!"
+
+
 # ---------------------------------------------------------------------------
 # F2 (A1): Foreign barber cannot manage another barber's order (cash/cancel)
 # ---------------------------------------------------------------------------

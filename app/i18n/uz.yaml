@@ -48,6 +48,7 @@ client:
   moved_back_2: "⚠️ Siz 10 daqiqada kelmadingiz. Navbatingiz 1 o'rin orqaga surildi. Hozirgi o'rningiz: {pos}.\nYana kechiksangiz, navbat bekor qilinadi."
   cancelled_no_show: "❌ Siz 3 marta kelmadingiz, navbatingiz bekor qilindi."
   service_completed_pay_prompt: "🎉 Xizmat yakunlandi! Rahmat.\nTo'lov miqdori: {amount} so'm. Iltimos, to'lov turini tanlang:"
+  service_completed_receipt: "🎉 Xizmat ko'rsatildi! Tashrifingiz uchun rahmat. Buyurtmangiz to'langan ({amount} so'm)."
   payment_receipt: "✅ To'lov qabul qilindi: {amount} so'm ({method}). Rahmat!"
   already_in_queue: "Sizda allaqachon faol navbat mavjud! Bir vaqtning o'zida faqat bitta navbat olish mumkin."
   barber_closed: "Ushbu barber hozir ishlamayapti yoki ish vaqti tugagan."
