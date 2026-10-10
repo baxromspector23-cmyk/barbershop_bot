@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import settings
@@ -130,6 +131,7 @@ async def process_due_work(
         eod_order_ids = [(o.id, o.status) for o in eod_orders]
 
     unclosed_in_service_items: list[str] = []
+    unclosed_in_service_order_ids: list[tuple[int, int]] = []
     for order_id, status in eod_order_ids:
         try:
             async with session_factory() as item_session:
@@ -146,11 +148,17 @@ async def process_due_work(
                         await qs._flag_refund_if_prepaid(order, reason="EOD_EXPIRED")
                         results["eod_cleaned"] += 1
                     elif order.status == OrderStatus.IN_SERVICE.value:
-                        # Report to owner instead of silently closed
+                        # Report to owner instead of silently closed, debounced by 24h
+                        stale_interval = timedelta(hours=24)
+                        if order.stale_alerted_at and (current_utc - order.stale_alerted_at) < stale_interval:
+                            continue
+
+                        order.stale_alerted_at = current_utc
                         barber_name = order.barber.display_name if order.barber else "Barber"
                         unclosed_in_service_items.append(
                             f"#{order.ticket_no} ({order.ticket_date}) - {barber_name}: {order.client_display_name}"
                         )
+                        unclosed_in_service_order_ids.append((order.id, order.ticket_no))
         except Exception as e:
             logger.error("Error cleaning up order #%s: %s", order_id, e)
 
@@ -160,7 +168,14 @@ async def process_due_work(
             "⚠️ Diqqat! Kechagi kundan yakunlanmagan (IN_SERVICE) buyurtmalar mavjud:\n"
             + "\n".join(unclosed_in_service_items)
         )
+        buttons = []
+        for oid_item, ticket_no in unclosed_in_service_order_ids:
+            buttons.append([
+                InlineKeyboardButton(text=f"✂️ Tugatish #{ticket_no}", callback_data=f"b_done:{oid_item}"),
+                InlineKeyboardButton(text=f"🚫 Bekor #{ticket_no}", callback_data=f"b_cancel:{oid_item}"),
+            ])
+        markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
         for oid in owner_ids:
-            await notifier.send_message(oid, report_text)
+            await notifier.send_message(oid, report_text, reply_markup=markup)
 
     return results

@@ -18,7 +18,11 @@ class BarberRepository:
         """Locks the barber row for concurrency control (FOR UPDATE in Postgres)."""
         bind = self.session.bind
         dialect_name = bind.dialect.name if bind else ""
-        stmt = select(Barber).where(Barber.id == barber_id)
+        stmt = (
+            select(Barber)
+            .where(Barber.id == barber_id)
+            .execution_options(populate_existing=True)
+        )
         if dialect_name == "postgresql":
             stmt = stmt.with_for_update()
         res = await self.session.execute(stmt)

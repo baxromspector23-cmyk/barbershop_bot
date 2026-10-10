@@ -19,6 +19,7 @@ class OrderRepository:
             select(Order)
             .where(Order.id == order_id)
             .options(selectinload(Order.client), selectinload(Order.barber))
+            .execution_options(populate_existing=True)
         )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
