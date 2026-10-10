@@ -7,6 +7,7 @@ from datetime import timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.i18n import t
 from app.models.barber import Barber
 from app.models.enums import OrderStatus, PaymentStatus
 from app.models.order import Order
@@ -16,7 +17,6 @@ from app.repositories.barber_repo import BarberRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.payment_repo import PaymentRepository
 from app.services.notification_service import NotificationService
-from app.i18n import t
 from app.utils.formatting import format_money
 from app.utils.time_utils import (
     now_tashkent,

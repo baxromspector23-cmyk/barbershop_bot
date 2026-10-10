@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.i18n import t
 from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus
+from app.models.order import Order
 from app.models.payment import Payment
 from app.payments import get_payment_providers
 from app.repositories.audit_repo import AuditRepository

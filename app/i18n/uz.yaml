@@ -99,6 +99,8 @@ barber:
   enter_service_name: "Yangi xizmat nomini kiriting:"
   enter_service_price: "Xizmat narxini so'mda kiriting (masalan: 50000):"
   enter_service_duration: "Xizmat davomiyligini daqiqada kiriting (masalan: 30):"
+  err_invalid_price: "Narx 0 dan katta bo'lishi kerak. Iltimos, qaytadan kiriting:"
+  err_invalid_duration: "Xizmat davomiyligi 5 dan 480 daqiqagacha bo'lishi kerak. Iltimos, qaytadan kiriting:"
   service_added: "Xizmat muvaffaqiyatli qo'shildi."
   unauthorized_order: "Bu buyurtma sizga tegishli emas."
   unauthorized_service: "Bu xizmat sizga tegishli emas."

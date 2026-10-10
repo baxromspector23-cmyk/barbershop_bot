@@ -59,7 +59,7 @@ def test_repo_tree_hygiene():
                 except Exception as e:
                     violations.append(f"Error reading {rel_path}: {e}")
 
-    assert not violations, f"Repo hygiene violations detected:\n" + "\n".join(violations)
+    assert not violations, "Repo hygiene violations detected:\n" + "\n".join(violations)
 
 
 def test_release_zip_hygiene(tmp_path):

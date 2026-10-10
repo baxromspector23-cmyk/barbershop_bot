@@ -775,6 +775,40 @@ async def handle_edit_service_name(call: CallbackQuery, session: AsyncSession, u
     await call.answer()
 
 
+@router.callback_query(F.data.startswith("b_svc_edit_duration:"))
+async def handle_edit_service_duration(call: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, lang: str):
+    if not is_staff(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await call.answer(t("barber.edit_services_forbidden", lang=lang), show_alert=True)
+        return
+
+    svc_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    service = await barber_repo.get_service_by_id(svc_id)
+    if not service:
+        await call.answer("Xizmat topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_service(user, service, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_service", lang=lang), show_alert=True)
+        return
+
+    await state.update_data(edit_svc_id=svc_id)
+    await state.set_state(AddServiceSG.waiting_for_duration)
+    await call.message.answer(t("barber.enter_service_duration", lang=lang))
+    await call.answer()
+
+
 @router.callback_query(F.data == "add_svc_prompt")
 async def handle_add_service_prompt(call: CallbackQuery, state: FSMContext, user: User, lang: str):
     if not is_staff(user):
@@ -835,9 +869,12 @@ async def handle_add_svc_price(
 
     text = (message.text or "").strip().replace(" ", "")
     if not text.isdigit():
-        await message.answer("Iltimos, faqat raqam kiriting (masalan: 50000):")
+        await message.answer(t("barber.enter_service_price", lang=lang))
         return
     price = int(text)
+    if price <= 0:
+        await message.answer(t("barber.err_invalid_price", lang=lang))
+        return
 
     data = await state.get_data()
     edit_svc_id = data.get("edit_svc_id")
@@ -868,11 +905,23 @@ async def handle_add_svc_duration(
 
     text = (message.text or "").strip()
     if not text.isdigit():
-        await message.answer("Iltimos, daqiqani raqamda kiriting (masalan: 30):")
+        await message.answer(t("barber.enter_service_duration", lang=lang))
         return
     duration = int(text)
+    if duration < 5 or duration > 480:
+        await message.answer(t("barber.err_invalid_duration", lang=lang))
+        return
 
     data = await state.get_data()
+    edit_svc_id = data.get("edit_svc_id")
+    if edit_svc_id:
+        barber_repo = BarberRepository(session)
+        await barber_repo.update_service(edit_svc_id, duration_minutes=duration)
+        await session.commit()
+        await state.clear()
+        await message.answer("Xizmat davomiyligi yangilandi.", reply_markup=get_role_main_menu(user))
+        return
+
     svc_name = data.get("svc_name", "Xizmat")
     svc_price = data.get("svc_price", 50000)
     target_barber_id = data.get("target_barber_id")
