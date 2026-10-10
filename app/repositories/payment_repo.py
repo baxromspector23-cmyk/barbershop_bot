@@ -76,6 +76,8 @@ class PaymentRepository:
         return res.scalar_one_or_none()
 
     async def get_by_order_id(self, order_id: int) -> Payment | None:
+        from sqlalchemy import case
+
         stmt = (
             select(Payment)
             .where(Payment.order_id == order_id)
@@ -84,10 +86,13 @@ class PaymentRepository:
                 selectinload(Payment.barber),
                 selectinload(Payment.client),
             )
-            .order_by(Payment.id.desc())
+            .order_by(
+                case((Payment.status == PaymentStatus.PAID.value, 0), else_=1),
+                Payment.id.asc(),
+            )
         )
         res = await self.session.execute(stmt)
-        return res.scalar_one_or_none()
+        return res.scalars().first()
 
     async def get_barber_payments(
         self, barber_id: int, limit: int = 20

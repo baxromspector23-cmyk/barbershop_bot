@@ -339,6 +339,101 @@ async def test_f5a_duplicate_payment_creates_refund_pending(
     assert primary.status == PaymentStatus.PAID.value
 
 
+@pytest.mark.asyncio
+async def test_f5a_same_id_idempotency(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M3 acceptance: same-id arriving twice is idempotent."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=True)
+    await db_session.commit()
+
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    p1 = await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="same_tx_123",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+
+    p2 = await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="same_tx_123",
+        amount=order.price,
+        order_id=order.id,
+    )
+    assert p1.id == p2.id
+
+
+@pytest.mark.asyncio
+async def test_f5a_duplicate_charge_not_counted_in_revenue_reports(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M3 acceptance: duplicate charge does not count toward revenue."""
+    from app.services.report_service import ReportService
+
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=True)
+    await db_session.commit()
+
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="valid_tx_1",
+        amount=order.price,
+        order_id=order.id,
+    )
+    # Service performed and completed
+    await qs.client_arrived(order.id)
+    await qs.complete_service(order.id)
+
+    # Duplicate second payment arrives
+    await ps.handle_successful_payment(
+        method=PaymentMethod.PAYME.value,
+        provider_payment_id="duplicate_tx_2",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+
+    rs = ReportService(db_session)
+    report = await rs.generate_report(period_type="today", offset=0)
+    # Revenue must equal order.price, NOT 2 * order.price
+    assert report.total_revenue == order.price
+
+
+@pytest.mark.asyncio
+async def test_f5a_payment_on_dead_order(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M3 acceptance: payment on dead order recorded as REFUND_PENDING, order not activated."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=False)
+    await qs.cancel_by_client(order.id, client.id)
+    await db_session.commit()
+
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    payment = await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="dead_order_tx",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+
+    assert payment.status == PaymentStatus.REFUND_PENDING.value
+    # Order must remain cancelled
+    await db_session.refresh(order)
+    assert order.status == OrderStatus.CANCELLED_BY_CLIENT.value
+
+
 # ---------------------------------------------------------------------------
 # F5b (M2): handle_pre_checkout strict validation
 # ---------------------------------------------------------------------------

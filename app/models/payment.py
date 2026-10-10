@@ -16,6 +16,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.types import UtcDateTime
 from app.models.enums import PaymentStatus
 
 if TYPE_CHECKING:
@@ -38,10 +39,11 @@ class Payment(Base):
         String(20), default=PaymentStatus.PENDING.value, nullable=False, index=True
     )
     provider_payment_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    refund_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
-    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UtcDateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

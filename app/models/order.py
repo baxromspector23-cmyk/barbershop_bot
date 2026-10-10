@@ -17,6 +17,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.db.types import UtcDateTime
 from app.models.enums import OrderStatus
 
 if TYPE_CHECKING:
@@ -50,20 +51,21 @@ class Order(Base):
     late_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UtcDateTime,
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
-    called_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    called_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    deadline_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     heads_up_sent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     # In-service reminder tracking (every 15m up to 3 times)
     reminder_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    last_reminded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_reminded_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    stale_alerted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
     barber: Mapped[Barber] = relationship("Barber", back_populates="orders", lazy="selectin")
     client: Mapped[User | None] = relationship("User", back_populates="orders", lazy="selectin")
