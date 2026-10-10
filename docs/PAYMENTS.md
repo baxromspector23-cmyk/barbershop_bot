@@ -44,16 +44,18 @@ Telegram Payments Click va Payme uchun rasmiy qulay integratsiyani taqdim etadi.
 
 ## 3. Paynet Integratsiyasi
 
-### Texnik Holat va Arxitektura:
+### Texnik Holat va Talablar:
 - Telegram Bot API tizimida Paynet uchun to'g'ridan-to'g'ri BotFather orqali beriladigan Provider Token mavjud emas.
-- Paynet O'zbekistonda ikki xil modelda ishlaydi:
-  1. **Universal Billing (Foyda platformasi / Web-checkout)**: Mijoz uchun to'lov havolasi yaratiladi va to'lov holati veb-xabarnoma orqali qabul qilinadi.
-  2. **UWS Connector (JSON-RPC 2.0 API)**: Serverlararo API (`GetInformation`, `PerformTransaction`, `CheckTransaction`, `CancelTransaction`). Ushbu integratsiya HTTPS (TLS 1.3), statik IP oq ro'yxati (IP whitelisting) va TAS-IX tarmog'i orqali ulanishni talab qiladi.
+- Paynet jonli integratsiyasi quyidagi talablarni talab qiladi:
+  1. **Rasmiy Merchant Shartnomasi**: Paynet (YaTT yoki MChJ bilan).
+  2. **Service ID va Maxfiy Kalit (Secret Key)**: Paynet ma'lumotlar bazasida ro'yxatdan o'tkazilgan xizmat identifikatori.
+  3. **Raqamli Imzo (Signature)**: Har bir tranzaksiya so'rovi va javobi uchun HMAC-SHA256 yoki RSA imzo tekshiruvi.
+  4. **Statik IP Oq Ro'yxati (IP Whitelisting)**: Paynet faqat ruxsat etilgan statik IP manzillardan keluvchi HTTPS so'rovlarini qabul qiladi.
+  5. **TAS-IX Tarmog'i**: Server O'zbekiston ichki milliy tarmog'ida (TAS-IX) joylashgan bo'lishi lozim.
 
-### Hozirgi Adapter Holati:
-- Botda `PaynetProvider` adapter interfeysi to'liq tayyorlangan (`app/payments/paynet_provider.py`).
-- Agar `PAYNET_ENABLED=true` qilinsa, buyurtma uchun Paynet tranzaksiya identifikatori va universal to'lov havolasi shakllantiriladi.
-- Haqiqiy hisob ma'lumotlarisiz (shartnoma, Service ID, TLS sertifikatlari) jonli tarmoqda sinab bo'lmaydi.
+### Xavfsizlik Qoidasi va Rejim:
+- Botda `PaynetProvider` adapteri tayyorlangan bo'lsa-da, haqiqiy callback serveri ulanmaguncha `PAYNET_ENABLED=true` holatida productionda ishga tushirish taqiqlangan (`validate_runtime()` startup paytida xato chiqaradi).
+- Faqatgina `PAYNET_ENABLED=true` bo'lgandagina Paynet tugmasi mijoz klaviaturasida ko'rinadi.
 
 ---
 
@@ -74,10 +76,10 @@ Telegram Payments Click va Payme uchun rasmiy qulay integratsiyani taqdim etadi.
 
 ---
 
-## 6. Haqiqiy Hisob Ma'lumotlarisiz Tekshirib Bo'lmaydigan Narsalar
+## 6. Haqiqiy Hisob Ma'lumotlarisiz Tekshirib Bo'lmaydigan Narsalar (NOT VERIFIED)
 
-Quyidagilar faqat haqiqiy shartnoma va Telegram provayder tokenlari bilan tekshirilishi mumkin:
+Quyidagilar faqat haqiqiy shartnoma va jonli to'lov ma'lumotlari bilan tekshirilishi mumkin:
 1. Haqiqiy bank kartasidan (Uzcard/Humo) real pul yechilishi.
 2. BotFather jonli to'lov tokenlarining Telegram klasterlari bilan aloqasi.
 3. Paynet serverining TAS-IX orqali yuboradigan haqiqiy JSON-RPC so'rovlari.
-Botning barcha ichki to'lov holatlari, kvitansiya xabarlari, buxgalteriya hisobi, dublikat to'lovlarni bloklash va tushum hisob-kitoblari birlik testlar va simulyatsiya orqali 100% to'liq tekshirilgan.
+Botning barcha ichki to'lov holatlari, kvitansiya xabarlari, buxgalteriya hisobi, dublikat to'lovlarni bloklash va tushum hisob-kitoblari avtomatlashtirilgan testlar va simulyatsiya orqali tekshirilgan.
