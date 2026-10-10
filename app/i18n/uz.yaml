@@ -13,6 +13,11 @@ common:
   blocked_user: "Sizning hisobingiz bloklangan. Administratorga murojaat qiling."
   action_already_processed: "Bu amal allaqachon bajarilgan."
   btn_back_main: "🏠 Bosh menyu"
+  order_not_found: "Buyurtma topilmadi."
+  barber_not_found: "Barber topilmadi."
+  service_not_found: "Xizmat topilmadi."
+  status_updated: "Holat yangilandi."
+  back_to_main_menu: "⬅️ Bosh menyuga qaytish:"
 
 client:
   panel_title: "💈 Xush kelibsiz! Marhamat, quyidagi bo'limlardan birini tanlang:"
@@ -52,6 +57,10 @@ client:
   payment_receipt: "✅ To'lov qabul qilindi: {amount} so'm ({method}). Rahmat!"
   already_in_queue: "Sizda allaqachon faol navbat mavjud! Bir vaqtning o'zida faqat bitta navbat olish mumkin."
   barber_closed: "Ushbu barber hozir ishlamayapti yoki ish vaqti tugagan."
+  no_active_services: "Ushbu barberda faol xizmatlar mavjud emas."
+  paynet_unavailable: "Paynet to'lov tizimi hozircha mavjud emas."
+  test_payments_disabled: "Test to'lovlari faqat test rejimida ishlaydi."
+  test_payment_success: "✅ Test to'lov muvaffaqiyatli qabul qilindi!"
 
 barber:
   panel_title: "💈 <b>Barber paneli</b>\n\nIsm: <b>{name}</b>\nHolat: <b>{status}</b>\nNavbatdagi mijozlar: <b>{count} ta</b>"
@@ -106,6 +115,10 @@ barber:
   unauthorized_service: "Bu xizmat sizga tegishli emas."
   edit_services_forbidden: "Xizmatlarni tahrirlash faqat bosh barber tomonidan ruxsat etilgan."
   permission_denied: "Ruxsat berilmagan."
+  profile_not_found: "Barber profili topilmadi."
+  service_name_updated: "Xizmat nomi yangilandi."
+  service_price_updated: "Xizmat narxi yangilandi."
+  service_duration_updated: "Xizmat davomiyligi yangilandi."
 
 owner:
   panel_title: "👑 <b>Katta Barber (Boshqaruv paneli)</b>\n\nIsm: <b>{name}</b>\nHolat: <b>{status}</b>\nNavbatdagi mijozlar: <b>{count} ta</b>"
@@ -139,12 +152,20 @@ owner:
   client_blocked_msg: "Mijoz {nick} muvaffaqiyatli bloklandi."
   client_unblocked_msg: "Mijoz {nick} blokdan chiqarildi."
   user_not_found: "Foydalanuvchi topilmadi."
+  no_barbers: "Barberlar mavjud emas."
+  barber_status_updated: "Barber holati yangilandi!"
+  admin_revoked: "Barber adminlik huquqi olindi va faolsizlantirildi."
+  cannot_revoke_self: "Egasi (Owner) o'z huquqini bekor qila olmaydi."
+  day_status_updated: "Kun holati yangilandi!"
+  err_time_format: "Xato format! Iltimos, HH:MM-HH:MM formatida kiriting (masalan: 09:00-20:00):"
+  err_time_order: "Boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak! Qaytadan kiriting:"
 
 onboarding:
   barber_welcome: "Xush kelibsiz! Siz barber sifatida taklif qilindingiz.\nIltimos, ismingizni kiriting:"
   barber_phone_request: "Iltimos, telefon raqamingizni yuboring (tugmani bosing):"
   barber_photo_request: "Iltimos, profilingiz uchun fotosurat yuboring (yoki 'O'tkazib yuborish' tugmasini bosing):"
   barber_activated: "Tabriklaymiz! Siz muvaffaqiyatli barber sifatida ro'yxatdan o'tdingiz."
+  invalid_invite: "Taklif havolasi yaroqsiz yoki muddati o'tgan."
 
 payments:
   err_malformed_payload: "Buyurtma ma'lumotlari xato."

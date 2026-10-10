@@ -13,6 +13,11 @@ common:
   blocked_user: "Ваш аккаунт заблокирован. Обратитесь к администратору."
   action_already_processed: "Это действие уже выполнено."
   btn_back_main: "🏠 Главное меню"
+  order_not_found: "Заказ не найден."
+  barber_not_found: "Барбер не найден."
+  service_not_found: "Услуга не найдена."
+  status_updated: "Статус обновлен."
+  back_to_main_menu: "⬅️ Главное меню:"
 
 client:
   panel_title: "💈 Добро пожаловать! Пожалуйста, выберите нужный раздел:"
@@ -52,6 +57,10 @@ client:
   payment_receipt: "✅ Оплата принята: {amount} so'm ({method}). Спасибо!"
   already_in_queue: "У вас уже есть активная очередь! Можно занимать только одну очередь одновременно."
   barber_closed: "Этот барбер сейчас не работает или рабочий день окончен."
+  no_active_services: "У этого барбера нет активных услуг."
+  paynet_unavailable: "Платежная система Paynet пока недоступна."
+  test_payments_disabled: "Тестовые платежи отключены в продакшене."
+  test_payment_success: "✅ Тестовый платеж успешно принят!"
 
 barber:
   panel_title: "💈 <b>Панель барбера</b>\n\nИмя: <b>{name}</b>\nСтатус: <b>{status}</b>\nКлиентов в очереди: <b>{count}</b>"
@@ -106,6 +115,10 @@ barber:
   unauthorized_service: "Эта услуга не принадлежит вам."
   edit_services_forbidden: "Редактирование услуг разрешено только главному барберу."
   permission_denied: "Доступ запрещен."
+  profile_not_found: "Профиль барбера не найден."
+  service_name_updated: "Название услуги обновлено."
+  service_price_updated: "Цена услуги обновлена."
+  service_duration_updated: "Длительность услуги обновлена."
 
 owner:
   panel_title: "👑 <b>Главный барбер (Панель управления)</b>\n\nИмя: <b>{name}</b>\nСтатус: <b>{status}</b>\nКлиентов в очереди: <b>{count}</b>"
@@ -139,12 +152,20 @@ owner:
   client_blocked_msg: "Клиент {nick} успешно заблокирован."
   client_unblocked_msg: "Клиент {nick} разблокирован."
   user_not_found: "Пользователь не найден."
+  no_barbers: "Барберы отсутствуют."
+  barber_status_updated: "Статус барбера обновлен!"
+  admin_revoked: "Права администратора барбера отозваны."
+  cannot_revoke_self: "Владелец не может отозвать свои права."
+  day_status_updated: "Статус дня обновлен!"
+  err_time_format: "Неверный формат! Пожалуйста, введите в формате ЧЧ:ММ-ЧЧ:ММ (например: 09:00-20:00):"
+  err_time_order: "Время начала должно быть раньше времени окончания! Введите снова:"
 
 onboarding:
   barber_welcome: "Добро пожаловать! Вы были приглашены в качестве барбера.\nПожалуйста, введите ваше имя:"
   barber_phone_request: "Пожалуйста, отправьте ваш номер телефона (нажмите кнопку):"
   barber_photo_request: "Пожалуйста, отправьте фотографию профиля (или нажмите 'Пропустить'):"
   barber_activated: "Поздравляем! Вы успешно зарегистрированы в качестве барбера."
+  invalid_invite: "Ссылка-приглашение недействительна или истекла."
 
 payments:
   err_malformed_payload: "Неверные данные заказа."

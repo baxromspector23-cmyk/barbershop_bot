@@ -194,14 +194,14 @@ async def render_barber_management_card(
 @router.callback_query(F.data.startswith("owner_manage_barber:"))
 async def handle_owner_manage_barber(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     barber_id = int(call.data.split(":")[1])
     barber_repo = BarberRepository(session)
     barber = await barber_repo.get_by_id(barber_id)
     if not barber:
-        await call.answer("Barber topilmadi", show_alert=True)
+        await call.answer(t("common.barber_not_found", lang=lang), show_alert=True)
         return
 
     text, markup = await render_barber_management_card(session, barber, lang)
@@ -212,7 +212,7 @@ async def handle_owner_manage_barber(call: CallbackQuery, session: AsyncSession,
 @router.callback_query(F.data.startswith("owner_toggle_barber_active:"))
 async def handle_owner_toggle_barber_active(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     barber_id = int(call.data.split(":")[1])
@@ -223,7 +223,7 @@ async def handle_owner_toggle_barber_active(call: CallbackQuery, session: AsyncS
 
     await barber_repo.set_active(barber.id, not barber.is_active)
     await session.commit()
-    await call.answer("Barber holati yangilandi!")
+    await call.answer(t("owner.barber_status_updated", lang=lang))
 
     barber = await barber_repo.get_by_id(barber_id)
     text, markup = await render_barber_management_card(session, barber, lang)
@@ -233,7 +233,7 @@ async def handle_owner_toggle_barber_active(call: CallbackQuery, session: AsyncS
 @router.callback_query(F.data.startswith("owner_revoke_admin:"))
 async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     barber_id = int(call.data.split(":")[1])
@@ -243,14 +243,14 @@ async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, 
         return
 
     if barber.user_id == user.id:
-        await call.answer("Egasi (Owner) o'z huquqini bekor qila olmaydi.", show_alert=True)
+        await call.answer(t("owner.cannot_revoke_self", lang=lang), show_alert=True)
         return
 
     if barber.user:
         barber.user.role = UserRole.CLIENT.value
     barber.is_active = False
     await session.commit()
-    await call.answer("Barber adminlik huquqi olindi va faolsizlantirildi.", show_alert=True)
+    await call.answer(t("owner.admin_revoked", lang=lang), show_alert=True)
 
     text, markup = await render_barber_management_card(session, barber, lang)
     await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
@@ -309,7 +309,7 @@ async def render_barber_schedule_view(
 @router.callback_query(F.data.startswith("owner_barber_schedule:"))
 async def handle_owner_barber_schedule(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     barber_id = int(call.data.split(":")[1])
@@ -326,7 +326,7 @@ async def handle_owner_barber_schedule(call: CallbackQuery, session: AsyncSessio
 @router.callback_query(F.data.startswith("owner_edit_wh:"))
 async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     _, barber_id_str, weekday_str = call.data.split(":")
@@ -368,7 +368,7 @@ async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user:
 @router.callback_query(F.data.startswith("owner_toggle_dayoff:"))
 async def handle_owner_toggle_dayoff(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     _, barber_id_str, weekday_str = call.data.split(":")
@@ -379,7 +379,7 @@ async def handle_owner_toggle_dayoff(call: CallbackQuery, session: AsyncSession,
     new_day_off = not (wh.is_day_off if wh else False)
     await barber_repo.update_working_hours(barber_id, weekday, is_day_off=new_day_off)
     await session.commit()
-    await call.answer("Kun holati yangilandi!")
+    await call.answer(t("owner.day_status_updated", lang=lang))
 
     barber = await barber_repo.get_by_id(barber_id)
     text, markup = await render_barber_schedule_view(session, barber, lang)
@@ -389,7 +389,7 @@ async def handle_owner_toggle_dayoff(call: CallbackQuery, session: AsyncSession,
 @router.callback_query(F.data.startswith("owner_set_hours_prompt:"))
 async def handle_owner_set_hours_prompt(call: CallbackQuery, state: FSMContext, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     _, barber_id_str, weekday_str = call.data.split(":")
@@ -419,14 +419,14 @@ async def handle_submit_working_hours(
     pattern = r"^([0-1]?[0-9]|2[0-3]):([0-5][0-9])-([0-1]?[0-9]|2[0-3]):([0-5][0-9])$"
     match = re.match(pattern, text)
     if not match:
-        await message.answer("Xato format! Iltimos, HH:MM-HH:MM formatida kiriting (masalan: 09:00-20:00):")
+        await message.answer(t("owner.err_time_format", lang=lang))
         return
 
     h1, m1, h2, m2 = map(int, match.groups())
     start_t = time(h1, m1)
     end_t = time(h2, m2)
     if start_t >= end_t:
-        await message.answer("Boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak! Qaytadan kiriting:")
+        await message.answer(t("owner.err_time_order", lang=lang))
         return
 
     barber_repo = BarberRepository(session)
@@ -478,7 +478,7 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
 @router.callback_query(F.data == "create_barber_invite")
 async def handle_create_barber_invite(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     user_service = UserService(session)
@@ -517,9 +517,9 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
     barbers = await barber_repo.get_all()
     if not barbers:
         if is_cb:
-            await target_msg.edit_text("Barberlar mavjud emas.", reply_markup=get_back_to_main_keyboard(lang))
+            await target_msg.edit_text(t("owner.no_barbers", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
         else:
-            await target_msg.answer("Barberlar mavjud emas.", reply_markup=get_back_to_main_keyboard(lang))
+            await target_msg.answer(t("owner.no_barbers", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
         return
 
     rows = []
@@ -546,7 +546,7 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
 @router.callback_query(F.data.startswith("owner_barber_services:"))
 async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     barber_id = int(call.data.split(":")[1])
@@ -652,7 +652,7 @@ async def handle_reports_menu(event: Message | CallbackQuery, session: AsyncSess
 @router.callback_query(F.data.startswith("rep:"))
 async def handle_report_nav(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     _, period_type, offset_str = call.data.split(":")
@@ -666,7 +666,7 @@ async def handle_report_nav(call: CallbackQuery, session: AsyncSession, user: Us
 @router.callback_query(F.data.startswith("rep_csv:"))
 async def handle_report_csv(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     _, period_type, offset_str = call.data.split(":")
@@ -731,7 +731,7 @@ async def handle_refunds_menu(event: Message | CallbackQuery, session: AsyncSess
 @router.callback_query(F.data.startswith("mark_refunded:"))
 async def handle_mark_refunded(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     payment_id = int(call.data.split(":")[1])

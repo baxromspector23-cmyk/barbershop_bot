@@ -89,7 +89,7 @@ async def handle_start(
             await message.answer(welcome_text, reply_markup=ReplyKeyboardRemove())
             return
         else:
-            await message.answer("Taklif havolasi yaroqsiz yoki muddati o'tgan.")
+            await message.answer(t("onboarding.invalid_invite", lang=lang))
 
     # Normal /start: show language selection
     welcome = t("common.welcome", lang=lang)
@@ -165,7 +165,7 @@ async def handle_change_language_btn(message: Message, lang: str):
 async def handle_onboarding_name(message: Message, state: FSMContext, lang: str):
     name = (message.text or "").strip()
     if not name:
-        await message.answer("Iltimos, ismingizni kiriting:")
+        await message.answer(t("onboarding.barber_welcome", lang=lang))
         return
 
     await state.update_data(display_name=name)

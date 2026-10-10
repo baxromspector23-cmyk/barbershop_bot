@@ -88,7 +88,7 @@ def test_o4_paynet_disabled_and_hidden(monkeypatch):
     # 1. In production, PAYNET_ENABLED=true raises error
     prod_settings = Settings(
         ENV="production",
-        BOT_TOKEN="123456789:ABCdefGHIjklMNOpqrSTUvwxYZ123456789",
+        BOT_TOKEN="123456789:test_token_string_for_unit_tests",
         OWNER_TELEGRAM_IDS=[9990001],
         WEBHOOK_SECRET="a" * 32,
         WEBHOOK_PATH_SECRET="b" * 32,

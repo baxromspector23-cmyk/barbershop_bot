@@ -100,7 +100,7 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
         barber_id = int(target)
         selected_barber = await barber_repo.get_by_id(barber_id)
         if not selected_barber:
-            await call.answer("Barber not found", show_alert=True)
+            await call.answer(t("common.barber_not_found", lang=lang), show_alert=True)
             return
 
         q_len, wait_min = await qs.get_barber_queue_metrics(selected_barber.id)
@@ -110,7 +110,7 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
 
     services = await barber_repo.get_services(selected_barber.id, active_only=True)
     if not services:
-        await call.answer("Ushbu barberda faol xizmatlar mavjud emas.", show_alert=True)
+        await call.answer(t("client.no_active_services", lang=lang), show_alert=True)
         return
 
     prompt = f"💈 {selected_barber.display_name}\n\n{t('client.choose_service', lang=lang)}"
@@ -147,7 +147,7 @@ async def handle_choose_service(call: CallbackQuery, session: AsyncSession, lang
     barber = await barber_repo.get_by_id(barber_id)
     service = await barber_repo.get_service_by_id(service_id)
     if not barber or not service:
-        await call.answer("Not found", show_alert=True)
+        await call.answer(t("common.service_not_found", lang=lang), show_alert=True)
         return
 
     q_len, wait_min = await qs.get_barber_queue_metrics(barber.id)
@@ -280,13 +280,13 @@ async def handle_pay_method_selected(
 
     elif method == PaymentMethod.PAYNET.value:
         if not settings.PAYNET_ENABLED or "PAYNET" not in settings.ENABLED_PAYMENT_METHODS:
-            await call.answer("Paynet not available", show_alert=True)
+            await call.answer(t("client.paynet_unavailable", lang=lang), show_alert=True)
             return
 
         _, payload = await payment_service.get_or_create_pending_payment(order.id, method)
         await session.commit()
         if not payload.get("available"):
-            await call.answer(payload.get("error", "Paynet not available"), show_alert=True)
+            await call.answer(payload.get("error", t("client.paynet_unavailable", lang=lang)), show_alert=True)
             return
         checkout_url = payload.get("checkout_url", "")
         await call.message.edit_text(
@@ -296,7 +296,7 @@ async def handle_pay_method_selected(
 
     elif method == "FAKE":
         if settings.ENV == "production" or settings.PAYMENTS_MODE != "test":
-            await call.answer("Test payments are disabled in production.", show_alert=True)
+            await call.answer(t("client.test_payments_disabled", lang=lang), show_alert=True)
             return
 
         # Instant test payment
@@ -308,7 +308,7 @@ async def handle_pay_method_selected(
         )
         await session.commit()
         await call.message.edit_text(
-            "✅ Test to'lov muvaffaqiyatli qabul qilindi!",
+            t("client.test_payment_success", lang=lang),
             reply_markup=get_my_queue_keyboard(order.id, lang=lang),
         )
 

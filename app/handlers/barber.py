@@ -77,7 +77,7 @@ async def handle_barber_queue(event: Message | CallbackQuery, session: AsyncSess
     barber_repo = BarberRepository(session)
     barber = await barber_repo.get_by_user_id(user.id)
     if not barber:
-        await target_msg.answer("Barber profili topilmadi.")
+        await target_msg.answer(t("barber.profile_not_found", lang=lang))
         return
 
     order_repo = OrderRepository(session)
@@ -130,7 +130,7 @@ async def handle_barber_queue(event: Message | CallbackQuery, session: AsyncSess
         markup = get_barber_order_actions(o, lang=lang)
         await target_msg.answer(text, reply_markup=markup)
 
-    await target_msg.answer("⬅️ Bosh menyuga qaytish:", reply_markup=get_back_to_main_keyboard(lang))
+    await target_msg.answer(t("common.back_to_main_menu", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
 
 
 # -------------------------------------------------------------
@@ -153,7 +153,7 @@ async def handle_b_arrived(call: CallbackQuery, session: AsyncSession, user: Use
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
     if not order:
-        await call.answer("Buyurtma topilmadi", show_alert=True)
+        await call.answer(t("common.order_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -192,7 +192,7 @@ async def handle_b_no_show(call: CallbackQuery, session: AsyncSession, user: Use
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
     if not order:
-        await call.answer("Buyurtma topilmadi", show_alert=True)
+        await call.answer(t("common.order_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -231,7 +231,7 @@ async def handle_b_done(call: CallbackQuery, session: AsyncSession, user: User, 
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
     if not order:
-        await call.answer("Buyurtma topilmadi", show_alert=True)
+        await call.answer(t("common.order_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -299,7 +299,7 @@ async def handle_b_cash(call: CallbackQuery, session: AsyncSession, user: User, 
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
     if not order:
-        await call.answer("Buyurtma topilmadi", show_alert=True)
+        await call.answer(t("common.order_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -340,7 +340,7 @@ async def handle_b_cancel(call: CallbackQuery, session: AsyncSession, user: User
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
     if not order:
-        await call.answer("Buyurtma topilmadi", show_alert=True)
+        await call.answer(t("common.order_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -370,7 +370,7 @@ async def handle_toggle_status_callback(
     call: CallbackQuery, session: AsyncSession, user: User, lang: str
 ):
     if not is_staff(user):
-        await call.answer("Permission denied", show_alert=True)
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     barber_repo = BarberRepository(session)
@@ -529,7 +529,7 @@ async def handle_walkin_phone(
             )
         ])
     await state.set_state(WalkinSG.waiting_for_service)
-    await message.answer("Xizmatni tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    await message.answer(t("client.choose_service", lang=lang), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
 @router.callback_query(WalkinSG.waiting_for_service, F.data.startswith("walkin_svc:"))
@@ -554,7 +554,7 @@ async def handle_walkin_service(
 
     service = await barber_repo.get_service_by_id(svc_id)
     if not service:
-        await call.answer("Xizmat topilmadi", show_alert=True)
+        await call.answer(t("common.service_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -668,7 +668,7 @@ async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user
 
     service = await barber_repo.get_service_by_id(svc_id)
     if not service:
-        await call.answer("Xizmat topilmadi", show_alert=True)
+        await call.answer(t("common.service_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -680,7 +680,7 @@ async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user
     await barber_repo.toggle_service(svc_id)
     await session.commit()
 
-    await call.answer("Holat yangilandi.")
+    await call.answer(t("common.status_updated", lang=lang))
     # Refresh list
     target_barber_id = service.barber_id if user.role == UserRole.OWNER.value else (barber.id if barber else service.barber_id)
     services = await barber_repo.get_services(target_barber_id, active_only=False)
@@ -726,7 +726,7 @@ async def handle_edit_service_price(call: CallbackQuery, session: AsyncSession, 
 
     service = await barber_repo.get_service_by_id(svc_id)
     if not service:
-        await call.answer("Xizmat topilmadi", show_alert=True)
+        await call.answer(t("common.service_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -760,7 +760,7 @@ async def handle_edit_service_name(call: CallbackQuery, session: AsyncSession, u
 
     service = await barber_repo.get_service_by_id(svc_id)
     if not service:
-        await call.answer("Xizmat topilmadi", show_alert=True)
+        await call.answer(t("common.service_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -794,7 +794,7 @@ async def handle_edit_service_duration(call: CallbackQuery, session: AsyncSessio
 
     service = await barber_repo.get_service_by_id(svc_id)
     if not service:
-        await call.answer("Xizmat topilmadi", show_alert=True)
+        await call.answer(t("common.service_not_found", lang=lang), show_alert=True)
         return
 
     try:
@@ -847,7 +847,7 @@ async def handle_add_svc_name(
         await barber_repo.update_service(edit_svc_id, name=name)
         await session.commit()
         await state.clear()
-        await message.answer("Xizmat nomi yangilandi.", reply_markup=get_role_main_menu(user))
+        await message.answer(t("barber.service_name_updated", lang=lang), reply_markup=get_role_main_menu(user))
         return
 
     await state.update_data(svc_name=name)
@@ -883,7 +883,7 @@ async def handle_add_svc_price(
         await barber_repo.update_service(edit_svc_id, price=price)
         await session.commit()
         await state.clear()
-        await message.answer("Xizmat narxi yangilandi.", reply_markup=get_role_main_menu(user))
+        await message.answer(t("barber.service_price_updated", lang=lang), reply_markup=get_role_main_menu(user))
         return
 
     await state.update_data(svc_price=price)
@@ -919,7 +919,7 @@ async def handle_add_svc_duration(
         await barber_repo.update_service(edit_svc_id, duration_minutes=duration)
         await session.commit()
         await state.clear()
-        await message.answer("Xizmat davomiyligi yangilandi.", reply_markup=get_role_main_menu(user))
+        await message.answer(t("barber.service_duration_updated", lang=lang), reply_markup=get_role_main_menu(user))
         return
 
     svc_name = data.get("svc_name", "Xizmat")
