@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 import logging
+import re
+from datetime import time
 
 from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
@@ -39,6 +39,10 @@ router = Router(name="owner_router")
 
 class BlockUserSG(StatesGroup):
     waiting_for_query = State()
+
+
+class EditScheduleSG(StatesGroup):
+    waiting_for_hours = State()
 
 
 def is_owner(user: User) -> bool:
@@ -250,6 +254,195 @@ async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, 
 
     text, markup = await render_barber_management_card(session, barber, lang)
     await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+
+
+WEEKDAY_NAMES_UZ = [
+    "Dushanba",
+    "Seshanba",
+    "Chorshanba",
+    "Payshanba",
+    "Juma",
+    "Shanba",
+    "Yakshanba",
+]
+
+
+async def render_barber_schedule_view(
+    session: AsyncSession, barber: Barber, lang: str
+) -> tuple[str, InlineKeyboardMarkup]:
+    barber_repo = BarberRepository(session)
+    wh_list = await barber_repo.get_working_hours(barber.id)
+    wh_map = {wh.weekday: wh for wh in wh_list}
+
+    lines = [f"🕒 <b>{barber.display_name}</b> ish vaqti jadvali:\n"]
+    buttons = []
+    for day_idx, day_name in enumerate(WEEKDAY_NAMES_UZ):
+        wh = wh_map.get(day_idx)
+        if wh and wh.is_day_off:
+            status_text = "Dam olish kuni"
+            btn_text = f"🔴 {day_name}: Dam olish"
+        elif wh:
+            start_str = wh.start_time.strftime("%H:%M")
+            end_str = wh.end_time.strftime("%H:%M")
+            status_text = f"{start_str} - {end_str}"
+            btn_text = f"🟢 {day_name}: {status_text}"
+        else:
+            status_text = "09:00 - 20:00"
+            btn_text = f"🟢 {day_name}: {status_text}"
+        lines.append(f"• <b>{day_name}</b>: {status_text}")
+        buttons.append([
+            InlineKeyboardButton(
+                text=btn_text,
+                callback_data=f"owner_edit_wh:{barber.id}:{day_idx}",
+            )
+        ])
+
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Barber ma'lumotlariga qaytish",
+            callback_data=f"owner_manage_barber:{barber.id}",
+        )
+    ])
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+@router.callback_query(F.data.startswith("owner_barber_schedule:"))
+async def handle_owner_barber_schedule(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer("Permission denied", show_alert=True)
+        return
+
+    barber_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_id(barber_id)
+    if not barber:
+        return
+
+    text, markup = await render_barber_schedule_view(session, barber, lang)
+    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("owner_edit_wh:"))
+async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer("Permission denied", show_alert=True)
+        return
+
+    _, barber_id_str, weekday_str = call.data.split(":")
+    barber_id, weekday = int(barber_id_str), int(weekday_str)
+
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_id(barber_id)
+    wh = await barber_repo.get_working_hour(barber_id, weekday)
+    if not barber:
+        return
+
+    day_name = WEEKDAY_NAMES_UZ[weekday]
+    if wh and wh.is_day_off:
+        status_desc = "Dam olish kuni"
+    elif wh:
+        status_desc = f"{wh.start_time.strftime('%H:%M')} - {wh.end_time.strftime('%H:%M')}"
+    else:
+        status_desc = "09:00 - 20:00"
+
+    text = (
+        f"🕒 <b>{barber.display_name}</b> — <b>{day_name}</b>\n\n"
+        f"Joriy holat: <b>{status_desc}</b>\n\n"
+        f"O'zgartirish uchun kerakli tugmani bosing:"
+    )
+    toggle_text = "🟢 Ish kuni qilish" if (wh and wh.is_day_off) else "🔴 Dam olish kuni qilish"
+    buttons = [
+        [
+            InlineKeyboardButton(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}"),
+            InlineKeyboardButton(text="✏️ Vaqtni o'zgartirish", callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}"),
+        ],
+        [
+            InlineKeyboardButton(text="⬅️ Jadvalga qaytish", callback_data=f"owner_barber_schedule:{barber_id}"),
+        ],
+    ]
+    await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("owner_toggle_dayoff:"))
+async def handle_owner_toggle_dayoff(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer("Permission denied", show_alert=True)
+        return
+
+    _, barber_id_str, weekday_str = call.data.split(":")
+    barber_id, weekday = int(barber_id_str), int(weekday_str)
+
+    barber_repo = BarberRepository(session)
+    wh = await barber_repo.get_working_hour(barber_id, weekday)
+    new_day_off = not (wh.is_day_off if wh else False)
+    await barber_repo.update_working_hours(barber_id, weekday, is_day_off=new_day_off)
+    await session.commit()
+    await call.answer("Kun holati yangilandi!")
+
+    barber = await barber_repo.get_by_id(barber_id)
+    text, markup = await render_barber_schedule_view(session, barber, lang)
+    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("owner_set_hours_prompt:"))
+async def handle_owner_set_hours_prompt(call: CallbackQuery, state: FSMContext, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer("Permission denied", show_alert=True)
+        return
+
+    _, barber_id_str, weekday_str = call.data.split(":")
+    barber_id, weekday = int(barber_id_str), int(weekday_str)
+
+    await state.set_state(EditScheduleSG.waiting_for_hours)
+    await state.update_data(target_barber_id=barber_id, target_weekday=weekday)
+    day_name = WEEKDAY_NAMES_UZ[weekday]
+    prompt = f"Iltimos, {day_name} uchun ish vaqtini quyidagi formatda kiriting:\nHH:MM-HH:MM (masalan: 09:00-20:00 yoki 10:00-19:00):"
+    await call.message.answer(prompt)
+    await call.answer()
+
+
+@router.message(EditScheduleSG.waiting_for_hours)
+async def handle_submit_working_hours(
+    message: Message, session: AsyncSession, user: User, state: FSMContext, lang: str
+):
+    if user.role != UserRole.OWNER.value and user.role != UserRole.BARBER.value:
+        await state.clear()
+        return
+
+    text = (message.text or "").strip()
+    data = await state.get_data()
+    barber_id = data.get("target_barber_id")
+    weekday = data.get("target_weekday")
+
+    pattern = r"^([0-1]?[0-9]|2[0-3]):([0-5][0-9])-([0-1]?[0-9]|2[0-3]):([0-5][0-9])$"
+    match = re.match(pattern, text)
+    if not match:
+        await message.answer("Xato format! Iltimos, HH:MM-HH:MM formatida kiriting (masalan: 09:00-20:00):")
+        return
+
+    h1, m1, h2, m2 = map(int, match.groups())
+    start_t = time(h1, m1)
+    end_t = time(h2, m2)
+    if start_t >= end_t:
+        await message.answer("Boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak! Qaytadan kiriting:")
+        return
+
+    barber_repo = BarberRepository(session)
+    await barber_repo.update_working_hours(
+        barber_id=barber_id,
+        weekday=weekday,
+        start_time=start_t,
+        end_time=end_t,
+        is_day_off=False,
+    )
+    await session.commit()
+    await state.clear()
+
+    barber = await barber_repo.get_by_id(barber_id)
+    text_view, markup = await render_barber_schedule_view(session, barber, lang)
+    await message.answer(f"✅ Ish vaqti saqlandi!\n\n{text_view}", reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "owner_back_to_barbers")

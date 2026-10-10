@@ -1,8 +1,7 @@
-from __future__ import annotations
-
+from datetime import time
 from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import and_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -21,6 +20,7 @@ class BarberRepository:
         stmt = (
             select(Barber)
             .where(Barber.id == barber_id)
+            .options(selectinload(Barber.working_hours))
             .execution_options(populate_existing=True)
         )
         if dialect_name == "postgresql":
@@ -99,6 +99,56 @@ class BarberRepository:
     async def set_active(self, barber_id: int, is_active: bool) -> None:
         stmt = update(Barber).where(Barber.id == barber_id).values(is_active=is_active)
         await self.session.execute(stmt)
+
+    async def get_working_hours(self, barber_id: int) -> list[BarberWorkingHours]:
+        stmt = (
+            select(BarberWorkingHours)
+            .where(BarberWorkingHours.barber_id == barber_id)
+            .order_by(BarberWorkingHours.weekday.asc())
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_working_hour(self, barber_id: int, weekday: int) -> BarberWorkingHours | None:
+        stmt = (
+            select(BarberWorkingHours)
+            .where(
+                and_(
+                    BarberWorkingHours.barber_id == barber_id,
+                    BarberWorkingHours.weekday == weekday,
+                )
+            )
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
+
+    async def update_working_hours(
+        self,
+        barber_id: int,
+        weekday: int,
+        start_time: time | None = None,
+        end_time: time | None = None,
+        is_day_off: bool | None = None,
+    ) -> BarberWorkingHours:
+        wh = await self.get_working_hour(barber_id, weekday)
+        if not wh:
+            wh = BarberWorkingHours(
+                barber_id=barber_id,
+                weekday=weekday,
+                start_time=start_time or time(9, 0),
+                end_time=end_time or time(20, 0),
+                is_day_off=is_day_off if is_day_off is not None else False,
+            )
+            self.session.add(wh)
+        else:
+            if start_time is not None:
+                wh.start_time = start_time
+            if end_time is not None:
+                wh.end_time = end_time
+            if is_day_off is not None:
+                wh.is_day_off = is_day_off
+        await self.session.flush()
+        return wh
 
     async def update_profile(
         self,

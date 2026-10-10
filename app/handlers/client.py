@@ -103,6 +103,11 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
             await call.answer("Barber not found", show_alert=True)
             return
 
+        q_len, wait_min = await qs.get_barber_queue_metrics(selected_barber.id)
+        if not qs.is_barber_open(selected_barber, wait_min):
+            await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
+            return
+
     services = await barber_repo.get_services(selected_barber.id, active_only=True)
     if not services:
         await call.answer("Ushbu barberda faol xizmatlar mavjud emas.", show_alert=True)
@@ -146,6 +151,10 @@ async def handle_choose_service(call: CallbackQuery, session: AsyncSession, lang
         return
 
     q_len, wait_min = await qs.get_barber_queue_metrics(barber.id)
+    if not qs.is_barber_open(barber, wait_min):
+        await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
+        return
+
     pos = q_len + 1
     ahead = q_len
 
