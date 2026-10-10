@@ -1,0 +1,23 @@
+{$DOMAIN:localhost} {
+    encode gzip zstd
+
+    # Health check endpoint passthrough
+    handle /health {
+        reverse_proxy app:8080
+    }
+
+    # Webhook endpoint passthrough
+    handle /webhook/* {
+        reverse_proxy app:8080
+    }
+
+    # Internal tick passthrough (protected by X-Cron-Secret)
+    handle /internal/* {
+        reverse_proxy app:8080
+    }
+
+    # Default fallback
+    handle {
+        reverse_proxy app:8080
+    }
+}
