@@ -49,3 +49,14 @@ This document records all architectural choices, sensible defaults, and trade-of
   - If `ALLOW_BARBER_EDIT_OWN_SERVICES=true`, barbers can add, edit, and toggle active status for their own services. Barbers cannot view or edit other barbers' services.
   - The Owner can view, edit, and manage all barbers, queues, and services.
   - Owner invite links: `https://t.me/<bot>?start=barber_<token>`. Tokens are cryptographically random strings (SHA-256 hashed in DB), expiring in 24 hours with single-use restriction.
+
+## 8. Barber Deactivation and Admin Rights Revocation Policy
+- **Deactivation Policy**: When an owner deactivates a barber (`is_active = False` via `BarberRepository.set_active`):
+  - The barber is immediately excluded from the client join list (`get_all_active()`).
+  - Direct join attempts to this barber fail with `BarberClosedError` ("Barber hozir ishlamayapti yoki ish vaqti tugagan").
+  - However, existing orders in the active queue (`WAITING`, `CALLED`, `IN_SERVICE`) remain intact and are still served to completion by the barber.
+- **Admin Rights Revocation**: When an owner revokes admin rights (`owner_revoke_admin`):
+  - The barber's user account role is downgraded from `BARBER` to `CLIENT` in `users`.
+  - The barber profile in `barbers` is marked `is_active = False`.
+  - The user loses access to all staff commands and panel keyboards, safely retaining order history.
+

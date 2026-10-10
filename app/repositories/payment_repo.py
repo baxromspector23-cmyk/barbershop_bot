@@ -151,6 +151,12 @@ class PaymentRepository:
                 filtered.append(p)
         return filtered
 
+    async def get_barber_revenue_in_range(
+        self, barber_id: int, start_utc: datetime, end_utc: datetime
+    ) -> int:
+        payments = await self.get_revenue_payments_in_range(start_utc, end_utc)
+        return sum(p.amount for p in payments if p.barber_id == barber_id)
+
     async def get_refund_pending_payments(self) -> list[Payment]:
         stmt = (
             select(Payment)

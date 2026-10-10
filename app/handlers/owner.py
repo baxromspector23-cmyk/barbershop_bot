@@ -21,6 +21,7 @@ from app.keyboards.owner import (
     get_refund_action_keyboard,
     get_reports_keyboard,
 )
+from app.models.barber import Barber
 from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.barber_repo import BarberRepository
@@ -30,6 +31,7 @@ from app.services.queue_service import QueueService
 from app.services.report_service import ReportService
 from app.services.user_service import UserService
 from app.utils.formatting import format_money
+from app.utils.time_utils import get_day_bounds_utc, get_week_bounds_utc, tashkent_today
 
 logger = logging.getLogger(__name__)
 router = Router(name="owner_router")
@@ -139,6 +141,52 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         await target_msg.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
+async def render_barber_management_card(
+    session: AsyncSession, barber: Barber, lang: str
+) -> tuple[str, InlineKeyboardMarkup]:
+    qs = QueueService(session)
+    payment_repo = PaymentRepository(session)
+    q_len, wait_min = await qs.get_barber_queue_metrics(barber.id)
+
+    today = tashkent_today()
+    day_start, day_end = get_day_bounds_utc(today)
+    week_start, week_end = get_week_bounds_utc(today)
+
+    today_rev = await payment_repo.get_barber_revenue_in_range(barber.id, day_start, day_end)
+    week_rev = await payment_repo.get_barber_revenue_in_range(barber.id, week_start, week_end)
+
+    status_str = "🟢 Faol" if barber.is_active else "🔴 Faol emas"
+    paused_str = " (Dam olishda)" if barber.is_paused else ""
+    username_str = f"@{barber.user.username}" if barber.user and barber.user.username else "—"
+    phone_str = barber.user.phone if barber.user and barber.user.phone else "—"
+
+    text = (
+        f"💈 <b>{barber.display_name}</b>\n"
+        f"Username: {username_str}\n"
+        f"Telefon: {phone_str}\n"
+        f"Holati: {status_str}{paused_str}\n"
+        f"Navbat: {q_len} ta mijoz (~{wait_min} daq)\n"
+        f"Bugungi tushum: {format_money(today_rev)}\n"
+        f"Haftalik tushum: {format_money(week_rev)}"
+    )
+
+    toggle_btn_text = "🔴 O'chirish" if barber.is_active else "🟢 Faollashtirish"
+    buttons = [
+        [
+            InlineKeyboardButton(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}"),
+            InlineKeyboardButton(text="✂️ Xizmatlari", callback_data=f"owner_barber_services:{barber.id}"),
+        ],
+    ]
+    if barber.user and barber.user.role == UserRole.BARBER.value:
+        buttons.append([
+            InlineKeyboardButton(text="👤 Adminlikni bekor qilish", callback_data=f"owner_revoke_admin:{barber.id}")
+        ])
+    buttons.append([
+        InlineKeyboardButton(text="⬅️ Barberlar ro'yxati", callback_data="owner_back_to_barbers")
+    ])
+    return text, InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 @router.callback_query(F.data.startswith("owner_manage_barber:"))
 async def handle_owner_manage_barber(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     if not is_owner(user):
@@ -152,21 +200,8 @@ async def handle_owner_manage_barber(call: CallbackQuery, session: AsyncSession,
         await call.answer("Barber topilmadi", show_alert=True)
         return
 
-    status_str = "🟢 Faol" if barber.is_active else "🔴 Faol emas"
-    paused_str = " (Dam olishda)" if barber.is_paused else ""
-    text = f"💈 <b>{barber.display_name}</b>\nHolati: {status_str}{paused_str}"
-
-    toggle_btn_text = "🔴 O'chirish" if barber.is_active else "🟢 Faollashtirish"
-    buttons = [
-        [
-            InlineKeyboardButton(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}"),
-            InlineKeyboardButton(text="✂️ Xizmatlari", callback_data=f"owner_barber_services:{barber.id}"),
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Barberlar ro'yxati", callback_data="owner_back_to_barbers"),
-        ],
-    ]
-    await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
+    text, markup = await render_barber_management_card(session, barber, lang)
+    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
     await call.answer()
 
 
@@ -186,23 +221,35 @@ async def handle_owner_toggle_barber_active(call: CallbackQuery, session: AsyncS
     await session.commit()
     await call.answer("Barber holati yangilandi!")
 
-    # Return to barber view
     barber = await barber_repo.get_by_id(barber_id)
-    status_str = "🟢 Faol" if barber.is_active else "🔴 Faol emas"
-    paused_str = " (Dam olishda)" if barber.is_paused else ""
-    text = f"💈 <b>{barber.display_name}</b>\nHolati: {status_str}{paused_str}"
+    text, markup = await render_barber_management_card(session, barber, lang)
+    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
 
-    toggle_btn_text = "🔴 O'chirish" if barber.is_active else "🟢 Faollashtirish"
-    buttons = [
-        [
-            InlineKeyboardButton(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}"),
-            InlineKeyboardButton(text="✂️ Xizmatlari", callback_data=f"owner_barber_services:{barber.id}"),
-        ],
-        [
-            InlineKeyboardButton(text="⬅️ Barberlar ro'yxati", callback_data="owner_back_to_barbers"),
-        ],
-    ]
-    await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
+
+@router.callback_query(F.data.startswith("owner_revoke_admin:"))
+async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer("Permission denied", show_alert=True)
+        return
+
+    barber_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_id(barber_id)
+    if not barber:
+        return
+
+    if barber.user_id == user.id:
+        await call.answer("Egasi (Owner) o'z huquqini bekor qila olmaydi.", show_alert=True)
+        return
+
+    if barber.user:
+        barber.user.role = UserRole.CLIENT.value
+    barber.is_active = False
+    await session.commit()
+    await call.answer("Barber adminlik huquqi olindi va faolsizlantirildi.", show_alert=True)
+
+    text, markup = await render_barber_management_card(session, barber, lang)
+    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "owner_back_to_barbers")
