@@ -677,6 +677,108 @@ async def test_f7_cancellation_paid_order_refund_pending(
         pay_repo = PaymentRepository(session)
         payment = await pay_repo.get_by_order_id(order_id)
         assert payment.status == PaymentStatus.REFUND_PENDING.value
+        assert payment.refund_reason == "EOD_EXPIRED"
+
+
+@pytest.mark.asyncio
+async def test_f7_client_cancel_prepaid_order_refund_pending(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M5: Client cancellation of a prepaid order marks payment REFUND_PENDING and notifies owner."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=True)
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="tx_client_cancel",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+    mock_notifier.sent_events.clear()
+
+    await qs.cancel_by_client(order.id, client.id)
+    await db_session.commit()
+
+    pay_repo = PaymentRepository(db_session)
+    payment = await pay_repo.get_by_order_id(order.id)
+    assert payment.status == PaymentStatus.REFUND_PENDING.value
+    assert payment.refund_reason == "CANCELLED_BY_CLIENT"
+    owner_events = [e for e in mock_notifier.sent_events if e["telegram_id"] in settings.OWNER_TELEGRAM_IDS]
+    assert len(owner_events) >= 1
+
+
+@pytest.mark.asyncio
+async def test_f7_staff_cancel_prepaid_order_refund_pending(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M5: Staff cancellation of a prepaid order marks payment REFUND_PENDING and notifies owner."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=True)
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="tx_staff_cancel",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+    mock_notifier.sent_events.clear()
+
+    await qs.cancel_by_staff(order.id, sample_barber.user_id)
+    await db_session.commit()
+
+    pay_repo = PaymentRepository(db_session)
+    payment = await pay_repo.get_by_order_id(order.id)
+    assert payment.status == PaymentStatus.REFUND_PENDING.value
+    assert payment.refund_reason == "CANCELLED_BY_STAFF"
+    owner_events = [e for e in mock_notifier.sent_events if e["telegram_id"] in settings.OWNER_TELEGRAM_IDS]
+    assert len(owner_events) >= 1
+
+
+@pytest.mark.asyncio
+async def test_f7_3rd_lateness_prepaid_order_refund_pending(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M5: 3rd lateness no-show on prepaid order marks payment REFUND_PENDING and notifies owner."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=True)
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="tx_noshow_cancel",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+
+    # Call the order
+    order.status = OrderStatus.CALLED.value
+    await db_session.commit()
+
+    # 1st no-show -> moved back
+    await qs.handle_lateness(order.id)
+    # 2nd no-show -> moved back
+    await qs.handle_lateness(order.id)
+    mock_notifier.sent_events.clear()
+
+    # 3rd no-show -> cancelled
+    await qs.handle_lateness(order.id)
+    await db_session.commit()
+
+    pay_repo = PaymentRepository(db_session)
+    payment = await pay_repo.get_by_order_id(order.id)
+    assert payment.status == PaymentStatus.REFUND_PENDING.value
+    assert payment.refund_reason == "CANCELLED_NO_SHOW"
+    owner_events = [e for e in mock_notifier.sent_events if e["telegram_id"] in settings.OWNER_TELEGRAM_IDS]
+    assert len(owner_events) >= 1
+
 
 
 # ---------------------------------------------------------------------------

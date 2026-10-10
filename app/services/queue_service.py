@@ -16,6 +16,8 @@ from app.repositories.barber_repo import BarberRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.payment_repo import PaymentRepository
 from app.services.notification_service import NotificationService
+from app.i18n import t
+from app.utils.formatting import format_money
 from app.utils.time_utils import (
     now_tashkent,
     now_utc,
@@ -467,7 +469,7 @@ class QueueService:
             await self.session.flush()
 
             # Handle refund if prepaid
-            await self._flag_refund_if_prepaid(order)
+            await self._flag_refund_if_prepaid(order, reason="CANCELLED_NO_SHOW")
 
             if order.client:
                 await self.notifier.notify_client_cancelled_no_show(
@@ -509,7 +511,7 @@ class QueueService:
         order.deadline_at = None
         await self.session.flush()
 
-        await self._flag_refund_if_prepaid(order)
+        await self._flag_refund_if_prepaid(order, reason="CANCELLED_BY_CLIENT")
 
         if was_called:
             await self.call_next_if_free(order.barber_id)
@@ -550,7 +552,7 @@ class QueueService:
         order.deadline_at = None
         await self.session.flush()
 
-        await self._flag_refund_if_prepaid(order)
+        await self._flag_refund_if_prepaid(order, reason="CANCELLED_BY_STAFF")
 
         if was_called_or_in_service:
             await self.call_next_if_free(order.barber_id)
@@ -565,9 +567,30 @@ class QueueService:
         )
         return order
 
-    async def _flag_refund_if_prepaid(self, order: Order) -> None:
-        """If order had a PAID payment, mark it as REFUND_PENDING and notify owner."""
+    async def _flag_refund_if_prepaid(self, order: Order, reason: str = "CANCELLED") -> None:
+        """If order had a PAID payment, mark it as REFUND_PENDING, notify owner and inform client."""
         payment = await self.payment_repo.get_by_order_id(order.id)
         if payment and payment.status == PaymentStatus.PAID.value:
-            await self.payment_repo.mark_as_refund_pending(payment)
-            logger.info("Payment #%s flagged as REFUND_PENDING for Order #%s", payment.id, order.id)
+            payment.status = PaymentStatus.REFUND_PENDING.value
+            payment.refund_reason = reason
+            await self.session.flush()
+            logger.info("Payment #%s flagged as REFUND_PENDING for Order #%s (%s)", payment.id, order.id, reason)
+
+            amount_fmt = format_money(payment.amount)
+            for owner_id in settings.OWNER_TELEGRAM_IDS:
+                owner_text = t(
+                    "payments.refund_pending_notify_owner",
+                    "uz",
+                    order_id=order.id,
+                    amount=amount_fmt,
+                    method=payment.method,
+                )
+                await self.notifier.send_message(owner_id, owner_text)
+
+            if order.client:
+                client_text = t(
+                    "payments.refund_pending_notify_client",
+                    lang=order.client.language,
+                    amount=amount_fmt,
+                )
+                await self.notifier.send_message(order.client.telegram_id, client_text)

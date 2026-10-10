@@ -142,6 +142,8 @@ async def process_due_work(
                     if order.status in [OrderStatus.WAITING.value, OrderStatus.CALLED.value]:
                         order.status = OrderStatus.EXPIRED.value
                         order.cancelled_at = current_utc
+                        qs = QueueService(item_session, notifier=notifier)
+                        await qs._flag_refund_if_prepaid(order, reason="EOD_EXPIRED")
                         results["eod_cleaned"] += 1
                     elif order.status == OrderStatus.IN_SERVICE.value:
                         # Report to owner instead of silently closed
