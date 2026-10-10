@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  postgres_test:
+    image: postgres:16-alpine
+    container_name: barbershop_postgres_test
+    environment:
+      POSTGRES_DB: barbershop_test
+      POSTGRES_USER: postgres_test
+      POSTGRES_PASSWORD: test_secret_password_for_pg16
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres_test -d barbershop_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 10

@@ -27,6 +27,10 @@ def get_migration_url() -> str:
         or settings.DATABASE_DIRECT_URL
         or settings.DATABASE_URL
     )
+    if url.startswith("sqlite://"):
+        url = url.replace("sqlite://", "sqlite+aiosqlite://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     return url
 
 
