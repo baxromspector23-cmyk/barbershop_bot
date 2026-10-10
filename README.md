@@ -1,7 +1,7 @@
 # 💈 Barbershop Telegram Queue Bot
 
-Ishlab chiqarishga tayyor, O'zbekistondagi sartaroshxonalar (barbershop) uchun navbat boshqaruv Telegram boti.  
-Production-ready Telegram queue management bot for barbershops in Uzbekistan (`Asia/Tashkent`, UTC+5, currency UZS).
+O'zbekistondagi sartaroshxonalar (barbershop) uchun navbat boshqaruv Telegram boti.  
+Telegram queue management bot for barbershops in Uzbekistan (`Asia/Tashkent`, UTC+5, currency UZS).
 
 ---
 
@@ -138,12 +138,13 @@ ruff check .
 │   ├── utils/               # Timezone (Asia/Tashkent) & formatting
 │   └── web/                 # aiohttp webhook & /internal/tick server
 ├── migrations/              # Alembic migration scripts
-├── tests/                   # Complete test suite (24 tests)
+├── tests/                   # Automated test suite (80+ tests)
 ├── scripts/
 │   ├── simulate_day.py      # End-to-end simulated day script
 │   └── set_webhook.py       # Telegram webhook registration CLI
 ├── docs/
 │   ├── DECISIONS.md         # Architectural decisions & defaults
+│   ├── KNOWN_LIMITATIONS.md # Real limits, dependencies & operational facts
 │   ├── PAYMENTS.md          # Payment integration & live transition
 │   └── SERVERLESS.md        # Google Cloud Run deployment guide
 ├── Dockerfile

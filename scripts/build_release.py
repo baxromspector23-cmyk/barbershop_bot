@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 scripts/build_release.py
-Builds a clean, production-ready release zip from an explicit allowlist.
+Builds a clean release zip from an explicit allowlist.
 Ensures no secrets, environment files (.env), database files (*.db, *.sqlite),
 or cache artifacts are included.
 """

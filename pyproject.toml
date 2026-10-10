@@ -1,7 +1,7 @@
 [project]
 name = "barbershop-queue-bot"
 version = "1.0.0"
-description = "Production-ready Telegram queue bot for a barbershop in Uzbekistan"
+description = "Telegram queue bot for a barbershop in Uzbekistan"
 requires-python = ">=3.10"
 
 [tool.ruff]
