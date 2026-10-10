@@ -16,7 +16,12 @@ from app.handlers.barber import (
     handle_b_no_show,
     handle_toggle_service,
 )
-from app.handlers.client import handle_pay_method_selected
+from app.handlers.client import (
+    handle_cancel_queue_prompt,
+    handle_confirm_cancel_queue,
+    handle_pay_method_selected,
+    handle_refresh_queue,
+)
 from app.handlers.payments import handle_pre_checkout
 from app.models.barber import Barber, BarberWorkingHours
 from app.models.enums import Language, OrderStatus, PaymentMethod, PaymentStatus, UserRole
@@ -289,6 +294,41 @@ async def test_f4_fake_payment_and_client_order_ownership(
     pay_repo = PaymentRepository(db_session)
     p = await pay_repo.get_by_order_id(order.id)
     assert p is None or p.status != PaymentStatus.PAID.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("callback_name", ["refresh", "cancel_prompt", "confirm_cancel"])
+async def test_f4_foreign_client_cannot_access_order_callbacks(
+    callback_name: str, db_session, sample_barber, sample_clients
+):
+    """M4 acceptance: every client callback carrying order_id must reject a foreign client."""
+    qs = QueueService(db_session)
+    svc = sample_barber.services[0]
+    owner_client = sample_clients[0]
+    foreign_client = sample_clients[1]
+
+    order = await qs.join_queue(sample_barber.id, svc.id, owner_client, pay_now=False)
+    await db_session.commit()
+
+    call = MagicMock()
+    call.answer = AsyncMock()
+    call.message = MagicMock()
+    call.message.edit_text = AsyncMock()
+
+    bot = MagicMock()
+
+    if callback_name == "refresh":
+        call.data = f"refresh_queue:{order.id}"
+        await handle_refresh_queue(call, db_session, foreign_client, "uz")
+    elif callback_name == "cancel_prompt":
+        call.data = f"cancel_queue_prompt:{order.id}"
+        await handle_cancel_queue_prompt(call, db_session, foreign_client, "uz")
+    elif callback_name == "confirm_cancel":
+        call.data = f"confirm_cancel_queue:{order.id}"
+        await handle_confirm_cancel_queue(call, db_session, foreign_client, bot, "uz")
+
+    call.answer.assert_called()
+    assert call.answer.call_args[1].get("show_alert") is True
 
 
 # ---------------------------------------------------------------------------

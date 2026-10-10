@@ -131,18 +131,28 @@ def get_payment_timing_keyboard(
 
 
 def get_payment_methods_keyboard(order_id: int, lang: str = "uz") -> InlineKeyboardMarkup:
-    buttons = [
-        [
-            InlineKeyboardButton(text="🔹 Click", callback_data=f"pay_method:{order_id}:CLICK"),
-            InlineKeyboardButton(text="🔸 Payme", callback_data=f"pay_method:{order_id}:PAYME"),
-        ],
-        [
-            InlineKeyboardButton(text="🟢 Paynet", callback_data=f"pay_method:{order_id}:PAYNET"),
-        ],
-        [
-            InlineKeyboardButton(text=t("common.cancel_btn", lang=lang), callback_data="cancel_action"),
-        ],
-    ]
+    from app.config import settings
+
+    buttons = []
+    main_row = []
+    if "CLICK" in settings.ENABLED_PAYMENT_METHODS:
+        main_row.append(InlineKeyboardButton(text="🔹 Click", callback_data=f"pay_method:{order_id}:CLICK"))
+    if "PAYME" in settings.ENABLED_PAYMENT_METHODS:
+        main_row.append(InlineKeyboardButton(text="🔸 Payme", callback_data=f"pay_method:{order_id}:PAYME"))
+    if main_row:
+        buttons.append(main_row)
+
+    if settings.PAYNET_ENABLED and "PAYNET" in settings.ENABLED_PAYMENT_METHODS:
+        buttons.append([InlineKeyboardButton(text="🟢 Paynet", callback_data=f"pay_method:{order_id}:PAYNET")])
+
+    if (
+        settings.PAYMENTS_MODE == "test"
+        and settings.ENV != "production"
+        and "FAKE" in settings.ENABLED_PAYMENT_METHODS
+    ):
+        buttons.append([InlineKeyboardButton(text="🧪 Test (FAKE)", callback_data=f"pay_method:{order_id}:FAKE")])
+
+    buttons.append([InlineKeyboardButton(text=t("common.cancel_btn", lang=lang), callback_data="cancel_action")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

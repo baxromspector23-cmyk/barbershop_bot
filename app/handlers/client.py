@@ -228,8 +228,8 @@ async def handle_pay_method_selected(
 
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
-    if not order:
-        await call.answer("Order not found", show_alert=True)
+    if not order or order.client_id != user.id:
+        await call.answer(t("payments.err_foreign_payer", lang=lang), show_alert=True)
         return
 
     payment_service = PaymentService(session, notifier=NotificationService(bot=bot))
@@ -240,8 +240,8 @@ async def handle_pay_method_selected(
 
         provider_token = payload.get("provider_token", "")
         if not provider_token:
-            if settings.PAYMENTS_MODE == "test":
-                # Fallback to test simulated payment in test mode
+            if settings.PAYMENTS_MODE == "test" and settings.ENV != "production":
+                # Fallback to test simulated payment in test mode only
                 await payment_service.handle_successful_payment(
                     method=method,
                     provider_payment_id=f"test_{order.id}_{method}",
@@ -270,6 +270,10 @@ async def handle_pay_method_selected(
         await call.answer()
 
     elif method == PaymentMethod.PAYNET.value:
+        if not settings.PAYNET_ENABLED or "PAYNET" not in settings.ENABLED_PAYMENT_METHODS:
+            await call.answer("Paynet not available", show_alert=True)
+            return
+
         _, payload = await payment_service.get_or_create_pending_payment(order.id, method)
         await session.commit()
         if not payload.get("available"):
@@ -282,6 +286,10 @@ async def handle_pay_method_selected(
         )
 
     elif method == "FAKE":
+        if settings.ENV == "production" or settings.PAYMENTS_MODE != "test":
+            await call.answer("Test payments are disabled in production.", show_alert=True)
+            return
+
         # Instant test payment
         await payment_service.handle_successful_payment(
             method="FAKE",
@@ -349,11 +357,14 @@ async def handle_my_queue_menu(event: Message | CallbackQuery, session: AsyncSes
 
 
 @router.callback_query(F.data.startswith("refresh_queue:"))
-async def handle_refresh_queue(call: CallbackQuery, session: AsyncSession, lang: str):
+async def handle_refresh_queue(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     order_id = int(call.data.split(":")[1])
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
-    if not order or order.status not in [OrderStatus.WAITING.value, OrderStatus.CALLED.value, OrderStatus.IN_SERVICE.value]:
+    if not order or order.client_id != user.id:
+        await call.answer(t("payments.err_foreign_payer", lang=lang), show_alert=True)
+        return
+    if order.status not in [OrderStatus.WAITING.value, OrderStatus.CALLED.value, OrderStatus.IN_SERVICE.value]:
         await call.message.edit_text(t("client.no_active_queue", lang=lang))
         return
     await show_active_queue(call, session, order, lang)
@@ -361,8 +372,13 @@ async def handle_refresh_queue(call: CallbackQuery, session: AsyncSession, lang:
 
 
 @router.callback_query(F.data.startswith("cancel_queue_prompt:"))
-async def handle_cancel_queue_prompt(call: CallbackQuery, lang: str):
+async def handle_cancel_queue_prompt(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
     order_id = int(call.data.split(":")[1])
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order or order.client_id != user.id:
+        await call.answer(t("payments.err_foreign_payer", lang=lang), show_alert=True)
+        return
     prompt = t("client.cancel_confirm", lang=lang)
     markup = get_cancel_confirm_keyboard(order_id, lang=lang)
     await call.message.edit_text(prompt, reply_markup=markup)
@@ -377,6 +393,11 @@ async def handle_confirm_cancel_queue(
     lang: str,
 ):
     order_id = int(call.data.split(":")[1])
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order or order.client_id != user.id:
+        await call.answer(t("payments.err_foreign_payer", lang=lang), show_alert=True)
+        return
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     try:
         await qs.cancel_by_client(order_id, user.id)
