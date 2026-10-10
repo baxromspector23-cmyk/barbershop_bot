@@ -144,3 +144,11 @@ class BarberRepository:
             svc.is_active = not svc.is_active
             await self.session.flush()
         return svc
+
+    async def update_service(self, service_id: int, **values) -> Service | None:
+        svc = await self.get_service_by_id(service_id)
+        if svc and values:
+            stmt = update(Service).where(Service.id == service_id).values(**values)
+            await self.session.execute(stmt)
+            await self.session.flush()
+        return svc

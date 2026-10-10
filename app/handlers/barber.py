@@ -24,6 +24,11 @@ from app.models.user import User
 from app.repositories.barber_repo import BarberRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.payment_repo import PaymentRepository
+from app.services.authorization import (
+    AuthorizationError,
+    assert_can_manage_order,
+    assert_can_manage_service,
+)
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
 from app.services.queue_service import QueueService
@@ -134,49 +139,118 @@ async def handle_barber_queue(event: Message | CallbackQuery, session: AsyncSess
 @router.callback_query(F.data.startswith("b_arrived:"))
 async def handle_b_arrived(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_staff(user):
-        await call.answer("Permission denied", show_alert=True)
+        logger.warning("Non-staff user %s attempted b_arrived callback", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     order_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order:
+        await call.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_order(user, order, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     order = await qs.client_arrived(order_id)
     await session.commit()
 
     if order:
         await call.answer(t("barber.arrived_success", lang=lang, ticket_no=order.ticket_no))
-        await call.message.edit_reply_markup(reply_markup=get_barber_order_actions(order, lang=lang))
+        if call.message and hasattr(call.message, "edit_reply_markup"):
+            try:
+                await call.message.edit_reply_markup(reply_markup=get_barber_order_actions(order, lang=lang))
+            except Exception:
+                pass
 
 
 @router.callback_query(F.data.startswith("b_no_show:"))
 async def handle_b_no_show(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_staff(user):
-        await call.answer("Permission denied", show_alert=True)
+        logger.warning("Non-staff user %s attempted b_no_show callback", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     order_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order:
+        await call.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_order(user, order, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     order = await qs.handle_lateness(order_id)
     await session.commit()
 
     if order:
         await call.answer(t("barber.no_show_success", lang=lang, ticket_no=order.ticket_no))
-        await call.message.delete()
+        if call.message and hasattr(call.message, "delete"):
+            try:
+                await call.message.delete()
+            except Exception:
+                pass
 
 
 @router.callback_query(F.data.startswith("b_done:"))
 async def handle_b_done(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_staff(user):
-        await call.answer("Permission denied", show_alert=True)
+        logger.warning("Non-staff user %s attempted b_done callback", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     order_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order:
+        await call.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_order(user, order, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     order = await qs.complete_service(order_id)
     await session.commit()
 
     if order:
         await call.answer(t("barber.done_success", lang=lang, ticket_no=order.ticket_no))
-        await call.message.delete()
+        if call.message and hasattr(call.message, "delete"):
+            try:
+                await call.message.delete()
+            except Exception:
+                pass
 
         # If order is completed and unpaid, prompt client with payment options;
         # if already paid, send thank-you/receipt only without payment keyboard
@@ -211,37 +285,81 @@ async def handle_b_done(call: CallbackQuery, session: AsyncSession, user: User, 
 @router.callback_query(F.data.startswith("b_cash:"))
 async def handle_b_cash(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_staff(user):
-        await call.answer("Permission denied", show_alert=True)
+        logger.warning("Non-staff user %s attempted b_cash callback", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     order_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order:
+        await call.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_order(user, order, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+
     payment_service = PaymentService(session, notifier=NotificationService(bot=bot))
     payment = await payment_service.confirm_cash_payment(order_id, user.id)
     await session.commit()
 
-    order_repo = OrderRepository(session)
-    order = await order_repo.get_by_id(order_id)
     ticket_no = order.ticket_no if order else order_id
     amount_str = format_money(payment.amount)
 
     await call.answer(t("barber.cash_success", lang=lang, ticket_no=ticket_no, amount=amount_str), show_alert=True)
-    await call.message.delete()
+    if call.message and hasattr(call.message, "delete"):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data.startswith("b_cancel:"))
 async def handle_b_cancel(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_staff(user):
-        await call.answer("Permission denied", show_alert=True)
+        logger.warning("Non-staff user %s attempted b_cancel callback", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
         return
 
     order_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    order_repo = OrderRepository(session)
+    order = await order_repo.get_by_id(order_id)
+    if not order:
+        await call.answer("Buyurtma topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_order(user, order, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     order = await qs.cancel_by_staff(order_id, user.id)
     await session.commit()
 
     ticket_no = order.ticket_no if order else order_id
     await call.answer(t("barber.cancel_success", lang=lang, ticket_no=ticket_no))
-    await call.message.delete()
+    if call.message and hasattr(call.message, "delete"):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
 
 
 # -------------------------------------------------------------
@@ -423,17 +541,37 @@ async def handle_walkin_service(
     bot: Bot,
     lang: str,
 ):
+    if not is_staff(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
     svc_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    service = await barber_repo.get_service_by_id(svc_id)
+    if not service:
+        await call.answer("Xizmat topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_service(user, service, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_service", lang=lang), show_alert=True)
+        return
+
     data = await state.get_data()
     walkin_name = data.get("walkin_name", "Mijoz")
     walkin_phone = data.get("walkin_phone", "")
 
-    barber_repo = BarberRepository(session)
-    barber = await barber_repo.get_by_user_id(user.id)
+    acting_barber_id = service.barber_id if user.role == UserRole.OWNER.value else barber.id
 
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     order = await qs.join_queue(
-        barber_id=barber.id,
+        barber_id=acting_barber_id,
         service_id=svc_id,
         client=None,
         walkin_name=walkin_name,
@@ -510,17 +648,42 @@ async def handle_barber_services(event: Message | CallbackQuery, session: AsyncS
         await target_msg.answer(title, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
-@router.callback_query(F.data.startswith("toggle_svc:"))
+@router.callback_query(F.data.startswith("toggle_svc:") | F.data.startswith("b_svc_toggle:"))
 async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_staff(user):
+        logger.warning("Non-staff user %s attempted service toggle", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await call.answer(t("barber.edit_services_forbidden", lang=lang), show_alert=True)
+        return
+
     svc_id = int(call.data.split(":")[1])
     barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    service = await barber_repo.get_service_by_id(svc_id)
+    if not service:
+        await call.answer("Xizmat topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_service(user, service, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_service", lang=lang), show_alert=True)
+        return
+
     await barber_repo.toggle_service(svc_id)
     await session.commit()
 
     await call.answer("Holat yangilandi.")
     # Refresh list
-    barber = await barber_repo.get_by_user_id(user.id)
-    services = await barber_repo.get_services(barber.id, active_only=False)
+    target_barber_id = service.barber_id if user.role == UserRole.OWNER.value else (barber.id if barber else service.barber_id)
+    services = await barber_repo.get_services(target_barber_id, active_only=False)
     rows = []
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
@@ -537,33 +700,155 @@ async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user
     rows.append([
         InlineKeyboardButton(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu")
     ])
-    await call.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    if call.message and hasattr(call.message, "edit_reply_markup"):
+        try:
+            await call.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data.startswith("b_svc_edit_price:"))
+async def handle_edit_service_price(call: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, lang: str):
+    if not is_staff(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await call.answer(t("barber.edit_services_forbidden", lang=lang), show_alert=True)
+        return
+
+    svc_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    service = await barber_repo.get_service_by_id(svc_id)
+    if not service:
+        await call.answer("Xizmat topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_service(user, service, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_service", lang=lang), show_alert=True)
+        return
+
+    await state.update_data(edit_svc_id=svc_id)
+    await state.set_state(AddServiceSG.waiting_for_price)
+    await call.message.answer(t("barber.enter_service_price", lang=lang))
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("b_svc_edit_name:"))
+async def handle_edit_service_name(call: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, lang: str):
+    if not is_staff(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await call.answer(t("barber.edit_services_forbidden", lang=lang), show_alert=True)
+        return
+
+    svc_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    service = await barber_repo.get_service_by_id(svc_id)
+    if not service:
+        await call.answer("Xizmat topilmadi", show_alert=True)
+        return
+
+    try:
+        assert_can_manage_service(user, service, barber=barber)
+    except AuthorizationError:
+        await call.answer(t("barber.unauthorized_service", lang=lang), show_alert=True)
+        return
+
+    await state.update_data(edit_svc_id=svc_id)
+    await state.set_state(AddServiceSG.waiting_for_name)
+    await call.message.answer(t("barber.enter_service_name", lang=lang))
+    await call.answer()
 
 
 @router.callback_query(F.data == "add_svc_prompt")
-async def handle_add_service_prompt(call: CallbackQuery, state: FSMContext, lang: str):
+async def handle_add_service_prompt(call: CallbackQuery, state: FSMContext, user: User, lang: str):
+    if not is_staff(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await call.answer(t("barber.edit_services_forbidden", lang=lang), show_alert=True)
+        return
+
     await state.set_state(AddServiceSG.waiting_for_name)
     await call.message.answer(t("barber.enter_service_name", lang=lang))
     await call.answer()
 
 
 @router.message(AddServiceSG.waiting_for_name)
-async def handle_add_svc_name(message: Message, state: FSMContext, lang: str):
+async def handle_add_svc_name(
+    message: Message, session: AsyncSession, user: User, state: FSMContext, lang: str
+):
+    if not is_staff(user):
+        await state.clear()
+        return
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await state.clear()
+        await message.answer(t("barber.edit_services_forbidden", lang=lang))
+        return
+
     name = (message.text or "").strip()
     if not name:
         return
+
+    data = await state.get_data()
+    edit_svc_id = data.get("edit_svc_id")
+    if edit_svc_id:
+        barber_repo = BarberRepository(session)
+        await barber_repo.update_service(edit_svc_id, name=name)
+        await session.commit()
+        await state.clear()
+        await message.answer("Xizmat nomi yangilandi.", reply_markup=get_role_main_menu(user))
+        return
+
     await state.update_data(svc_name=name)
     await state.set_state(AddServiceSG.waiting_for_price)
     await message.answer(t("barber.enter_service_price", lang=lang))
 
 
 @router.message(AddServiceSG.waiting_for_price)
-async def handle_add_svc_price(message: Message, state: FSMContext, lang: str):
+async def handle_add_svc_price(
+    message: Message, session: AsyncSession, user: User, state: FSMContext, lang: str
+):
+    if not is_staff(user):
+        await state.clear()
+        return
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await state.clear()
+        await message.answer(t("barber.edit_services_forbidden", lang=lang))
+        return
+
     text = (message.text or "").strip().replace(" ", "")
     if not text.isdigit():
         await message.answer("Iltimos, faqat raqam kiriting (masalan: 50000):")
         return
     price = int(text)
+
+    data = await state.get_data()
+    edit_svc_id = data.get("edit_svc_id")
+    if edit_svc_id:
+        barber_repo = BarberRepository(session)
+        await barber_repo.update_service(edit_svc_id, price=price)
+        await session.commit()
+        await state.clear()
+        await message.answer("Xizmat narxi yangilandi.", reply_markup=get_role_main_menu(user))
+        return
+
     await state.update_data(svc_price=price)
     await state.set_state(AddServiceSG.waiting_for_duration)
     await message.answer(t("barber.enter_service_duration", lang=lang))
@@ -573,6 +858,14 @@ async def handle_add_svc_price(message: Message, state: FSMContext, lang: str):
 async def handle_add_svc_duration(
     message: Message, session: AsyncSession, user: User, state: FSMContext, lang: str
 ):
+    if not is_staff(user):
+        await state.clear()
+        return
+    if user.role != UserRole.OWNER.value and not settings.ALLOW_BARBER_EDIT_OWN_SERVICES:
+        await state.clear()
+        await message.answer(t("barber.edit_services_forbidden", lang=lang))
+        return
+
     text = (message.text or "").strip()
     if not text.isdigit():
         await message.answer("Iltimos, daqiqani raqamda kiriting (masalan: 30):")

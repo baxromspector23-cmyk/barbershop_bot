@@ -100,6 +100,10 @@ barber:
   enter_service_price: "Хизмат нархини сўмда киритинг (масалан: 50000):"
   enter_service_duration: "Хизмат давомийлигини дақиқада киритинг (масалан: 30):"
   service_added: "Хизмат муваффақиятли қўшилди."
+  unauthorized_order: "Бу буюртма сизга тегишли эмас."
+  unauthorized_service: "Бу хизмат сизга тегишли эмас."
+  edit_services_forbidden: "Хизматларни таҳрирлаш фақат бош барбер томонидан рухсат этилган."
+  permission_denied: "Рухсат берилмаган."
 
 owner:
   panel_title: "👑 <b>Катта Барбер (Бошқарув панели)</b>\n\nИсм: <b>{name}</b>\nҲолат: <b>{status}</b>\nНавбатдаги мижозлар: <b>{count} та</b>"

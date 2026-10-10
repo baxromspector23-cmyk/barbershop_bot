@@ -69,84 +69,84 @@ def mock_notifier():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def sample_barber(session_factory) -> Barber:
-    async with session_factory() as session:
-        owner_user = User(
-            telegram_id=111111,
-            username="barber_bob",
-            first_name="Bobur",
-            last_name="Barber",
-            language=Language.UZ.value,
-            role=UserRole.BARBER.value,
-        )
-        session.add(owner_user)
-        await session.flush()
+async def sample_barber(db_session: AsyncSession) -> Barber:
+    session = db_session
+    owner_user = User(
+        telegram_id=111111,
+        username="barber_bob",
+        first_name="Bobur",
+        last_name="Barber",
+        language=Language.UZ.value,
+        role=UserRole.BARBER.value,
+    )
+    session.add(owner_user)
+    await session.flush()
 
-        barber = Barber(
-            user_id=owner_user.id,
-            display_name="Bobur Barber",
-            is_active=True,
-            is_paused=False,
-        )
-        session.add(barber)
-        await session.flush()
+    barber = Barber(
+        user_id=owner_user.id,
+        display_name="Bobur Barber",
+        is_active=True,
+        is_paused=False,
+    )
+    session.add(barber)
+    await session.flush()
 
-        for w in range(7):
-            wh = BarberWorkingHours(
-                barber_id=barber.id,
-                weekday=w,
-                start_time=time(0, 0),
-                end_time=time(23, 59),
-                is_day_off=False,
-            )
-            session.add(wh)
-
-        svc1 = Service(
+    for w in range(7):
+        wh = BarberWorkingHours(
             barber_id=barber.id,
-            name="Soch olish",
-            price=50000,
-            duration_minutes=30,
-            is_active=True,
+            weekday=w,
+            start_time=time(0, 0),
+            end_time=time(23, 59),
+            is_day_off=False,
         )
-        svc2 = Service(
-            barber_id=barber.id,
-            name="Soqol olish",
-            price=30000,
-            duration_minutes=20,
-            is_active=True,
-        )
-        session.add_all([svc1, svc2])
-        await session.commit()
+        session.add(wh)
 
-        stmt = (
-            select(Barber)
-            .where(Barber.id == barber.id)
-            .options(
-                selectinload(Barber.working_hours),
-                selectinload(Barber.services),
-                selectinload(Barber.user),
-            )
+    svc1 = Service(
+        barber_id=barber.id,
+        name="Soch olish",
+        price=50000,
+        duration_minutes=30,
+        is_active=True,
+    )
+    svc2 = Service(
+        barber_id=barber.id,
+        name="Soqol olish",
+        price=30000,
+        duration_minutes=20,
+        is_active=True,
+    )
+    session.add_all([svc1, svc2])
+    await session.commit()
+
+    stmt = (
+        select(Barber)
+        .where(Barber.id == barber.id)
+        .options(
+            selectinload(Barber.working_hours),
+            selectinload(Barber.services),
+            selectinload(Barber.user),
         )
-        res = await session.execute(stmt)
-        return res.scalar_one()
+    )
+    res = await session.execute(stmt)
+    return res.scalar_one()
 
 
 @pytest_asyncio.fixture(scope="function")
-async def sample_clients(session_factory) -> list[User]:
-    async with session_factory() as session:
-        clients = []
-        for i in range(1, 6):
-            c = User(
-                telegram_id=200000 + i,
-                username=f"client_{i}",
-                first_name=f"Client{i}",
-                language=Language.UZ.value,
-                role=UserRole.CLIENT.value,
-            )
-            session.add(c)
-            clients.append(c)
-        await session.commit()
+async def sample_clients(db_session: AsyncSession) -> list[User]:
+    session = db_session
+    clients = []
+    for i in range(1, 6):
+        c = User(
+            telegram_id=200000 + i,
+            username=f"client_{i}",
+            first_name=f"Client{i}",
+            language=Language.UZ.value,
+            role=UserRole.CLIENT.value,
+        )
+        session.add(c)
+        clients.append(c)
+    await session.commit()
 
-        stmt = select(User).where(User.telegram_id.in_([200000 + i for i in range(1, 6)])).order_by(User.id.asc())
-        res = await session.execute(stmt)
-        return list(res.scalars().all())
+    stmt = select(User).where(User.telegram_id.in_([200000 + i for i in range(1, 6)])).order_by(User.id.asc())
+    res = await session.execute(stmt)
+    return list(res.scalars().all())

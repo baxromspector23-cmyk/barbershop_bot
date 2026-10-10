@@ -100,6 +100,10 @@ barber:
   enter_service_price: "Xizmat narxini so'mda kiriting (masalan: 50000):"
   enter_service_duration: "Xizmat davomiyligini daqiqada kiriting (masalan: 30):"
   service_added: "Xizmat muvaffaqiyatli qo'shildi."
+  unauthorized_order: "Bu buyurtma sizga tegishli emas."
+  unauthorized_service: "Bu xizmat sizga tegishli emas."
+  edit_services_forbidden: "Xizmatlarni tahrirlash faqat bosh barber tomonidan ruxsat etilgan."
+  permission_denied: "Ruxsat berilmagan."
 
 owner:
   panel_title: "👑 <b>Katta Barber (Boshqaruv paneli)</b>\n\nIsm: <b>{name}</b>\nHolat: <b>{status}</b>\nNavbatdagi mijozlar: <b>{count} ta</b>"

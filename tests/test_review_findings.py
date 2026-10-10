@@ -14,6 +14,8 @@ from app.handlers.barber import (
     handle_b_cash,
     handle_b_done,
     handle_b_no_show,
+    handle_edit_service_name,
+    handle_edit_service_price,
     handle_toggle_service,
 )
 from app.handlers.client import (
@@ -846,6 +848,136 @@ async def test_f9_barber_callback_authorization(
     # Order status must still be CALLED, not IN_SERVICE
     await db_session.refresh(order)
     assert order.status == OrderStatus.CALLED.value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "action",
+    [
+        "arrived",
+        "no_show",
+        "done",
+        "cash",
+        "cancel",
+        "toggle_svc",
+        "edit_price",
+        "edit_name",
+    ],
+)
+@pytest.mark.parametrize("actor_type", ["foreign_barber", "plain_client"])
+async def test_a1_a4_parametrized_barber_callbacks(
+    action: str,
+    actor_type: str,
+    db_session,
+    sample_barber,
+    second_barber,
+    sample_clients,
+    mock_notifier,
+):
+    """
+    Acceptance for A1-A4: Every barber callback carrying an ID, when called by:
+    (a) foreign barber
+    (b) plain client
+    must leave the DB unchanged and answer with show_alert=True.
+    """
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    acting_user = second_barber.user if actor_type == "foreign_barber" else sample_clients[1]
+
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=False)
+    await db_session.commit()
+
+    call = MagicMock()
+    call.answer = AsyncMock()
+    call.message = MagicMock()
+    call.message.delete = AsyncMock()
+    call.message.edit_reply_markup = AsyncMock()
+    call.message.answer = AsyncMock()
+    bot = MagicMock()
+    state = MagicMock()
+    state.update_data = AsyncMock()
+    state.set_state = AsyncMock()
+
+    initial_order_status = order.status
+    initial_svc_active = svc.is_active
+
+    if action == "arrived":
+        call.data = f"b_arrived:{order.id}"
+        await handle_b_arrived(call, db_session, acting_user, bot, "uz")
+    elif action == "no_show":
+        call.data = f"b_no_show:{order.id}"
+        await handle_b_no_show(call, db_session, acting_user, bot, "uz")
+    elif action == "done":
+        call.data = f"b_done:{order.id}"
+        await handle_b_done(call, db_session, acting_user, bot, "uz")
+    elif action == "cash":
+        call.data = f"b_cash:{order.id}"
+        await handle_b_cash(call, db_session, acting_user, bot, "uz")
+    elif action == "cancel":
+        call.data = f"b_cancel:{order.id}"
+        await handle_b_cancel(call, db_session, acting_user, bot, "uz")
+    elif action == "toggle_svc":
+        call.data = f"b_svc_toggle:{svc.id}"
+        await handle_toggle_service(call, db_session, acting_user, "uz")
+    elif action == "edit_price":
+        call.data = f"b_svc_edit_price:{svc.id}"
+        await handle_edit_service_price(call, db_session, acting_user, state, "uz")
+    elif action == "edit_name":
+        call.data = f"b_svc_edit_name:{svc.id}"
+        await handle_edit_service_name(call, db_session, acting_user, state, "uz")
+
+    call.answer.assert_called()
+    _, kwargs = call.answer.call_args
+    assert kwargs.get("show_alert") is True
+
+    # Assert DB unchanged
+    await db_session.refresh(order)
+    assert order.status == initial_order_status
+    await db_session.refresh(svc)
+    assert svc.is_active == initial_svc_active
+
+
+@pytest.mark.asyncio
+async def test_a4_allow_barber_edit_own_services_flag(
+    db_session, sample_barber, monkeypatch
+):
+    """
+    A4: When ALLOW_BARBER_EDIT_OWN_SERVICES is False, non-owner barbers cannot edit services.
+    Owner can still edit services.
+    """
+    monkeypatch.setattr(settings, "ALLOW_BARBER_EDIT_OWN_SERVICES", False)
+    svc = sample_barber.services[0]
+
+    call = MagicMock()
+    call.data = f"b_svc_toggle:{svc.id}"
+    call.answer = AsyncMock()
+    call.message = MagicMock()
+    call.message.edit_reply_markup = AsyncMock()
+
+    # sample_barber.user has role BARBER (not OWNER)
+    await handle_toggle_service(call, db_session, sample_barber.user, "uz")
+    call.answer.assert_called()
+    _, kwargs = call.answer.call_args
+    assert kwargs.get("show_alert") is True
+
+    # But owner can edit even if ALLOW_BARBER_EDIT_OWN_SERVICES is False
+    owner_user = User(
+        telegram_id=111999,
+        username="owner_boss",
+        first_name="Boss",
+        language=Language.UZ.value,
+        role=UserRole.OWNER.value,
+    )
+    db_session.add(owner_user)
+    await db_session.commit()
+
+    call.answer.reset_mock()
+    await handle_toggle_service(call, db_session, owner_user, "uz")
+    call.answer.assert_called()
+    _, kwargs = call.answer.call_args
+    assert kwargs.get("show_alert") is not True
+
 
 
 # ---------------------------------------------------------------------------
