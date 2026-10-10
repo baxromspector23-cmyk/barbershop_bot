@@ -34,16 +34,30 @@ def get_engine_args(url: str) -> dict:
 
 def create_app_engine():
     url = os.environ.get("DATABASE_URL", settings.DATABASE_URL)
+    is_sqlite = "sqlite" in url
+
+    if settings.ENV == "production":
+        if is_sqlite:
+            logger.critical("SQLite is strictly prohibited in production! DATABASE_URL=%s", url)
+            raise RuntimeError("SQLite is strictly prohibited in production.")
+        if not (url.startswith("postgresql+asyncpg://") or "asyncpg" in url):
+            logger.critical("Production requires PostgreSQL with asyncpg! DATABASE_URL=%s", url)
+            raise RuntimeError(f"Invalid production DATABASE_URL: {url}")
+        try:
+            return create_async_engine(url, **get_engine_args(url))
+        except Exception as e:
+            logger.critical("Failed to connect to PostgreSQL in production: %s", e)
+            raise RuntimeError(f"PostgreSQL connection failed in production: {e}") from e
+
+    # In dev or test environments:
     try:
         return create_async_engine(url, **get_engine_args(url))
     except (ModuleNotFoundError, Exception) as e:
-        logger.warning(
-            "Could not initialize engine with %s (%s). Falling back to sqlite+aiosqlite.",
-            url,
-            e,
-        )
-        fallback_url = "sqlite+aiosqlite:///barbershop_dev.db"
-        return create_async_engine(fallback_url, **get_engine_args(fallback_url))
+        if settings.ENV in ["dev", "test", "development"]:
+            logger.info("Database driver or host unavailable for %s (%s). Using dev SQLite.", url, e)
+            dev_url = "sqlite+aiosqlite:///barbershop_dev.db"
+            return create_async_engine(dev_url, **get_engine_args(dev_url))
+        raise
 
 
 engine = create_app_engine()

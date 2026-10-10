@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import hmac
 import logging
 
 from aiogram import Bot, Dispatcher
@@ -25,11 +24,17 @@ def create_web_app(
     app = web.Application()
 
     async def health_handler(request: web.Request) -> web.Response:
-        return web.json_response({"status": "ok", "env": settings.ENV})
+        db_status = "ok"
+        try:
+            async with session_factory() as session:
+                await session.execute(select(1))
+        except Exception:
+            db_status = "error"
+        return web.json_response({"status": "ok", "db": db_status})
 
     async def tick_handler(request: web.Request) -> web.Response:
-        cron_secret = request.headers.get("X-Cron-Secret")
-        if not cron_secret or cron_secret != settings.CRON_SECRET:
+        cron_secret = request.headers.get("X-Cron-Secret", "")
+        if not cron_secret or not hmac.compare_digest(cron_secret, settings.CRON_SECRET):
             return web.json_response({"error": "Unauthorized"}, status=401)
 
         notifier = NotificationService(bot=bot)
@@ -37,8 +42,8 @@ def create_web_app(
         return web.json_response({"status": "ok", "results": results})
 
     async def webhook_handler(request: web.Request) -> web.Response:
-        secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        if not secret_token or secret_token != settings.WEBHOOK_SECRET:
+        secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+        if not secret_token or not hmac.compare_digest(secret_token, settings.WEBHOOK_SECRET):
             logger.warning("Rejected webhook: invalid secret token")
             return web.Response(status=403, text="Forbidden")
 
