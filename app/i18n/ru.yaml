@@ -139,3 +139,15 @@ onboarding:
   barber_phone_request: "Пожалуйста, отправьте ваш номер телефона (нажмите кнопку):"
   barber_photo_request: "Пожалуйста, отправьте фотографию профиля (или нажмите 'Пропустить'):"
   barber_activated: "Поздравляем! Вы успешно зарегистрированы в качестве барбера."
+
+payments:
+  err_malformed_payload: "Неверные данные заказа."
+  err_order_not_found: "Заказ не найден."
+  err_order_cancelled: "Данный заказ отменен."
+  err_amount_mismatch: "Сумма оплаты не совпадает."
+  err_currency_uzs: "Валюта должна быть только UZS."
+  err_already_paid: "Этот заказ уже оплачен."
+  err_foreign_payer: "Оплата может быть произведена только владельцем заказа."
+  refund_pending_notify_owner: "⚠️ Заказ #{order_id} отменен. Требуется возврат: {amount} so'm ({method})."
+  refund_pending_notify_client: "⚠️ Ваш заказ отменен. Оплаченная сумма ({amount} so'm) скоро будет возвращена."
+  refund_duplicate_notify_owner: "⚠️ Поступил повторный платеж по заказу #{order_id} ({charge_id}): {amount} so'm ({method}). Ожидает возврата."

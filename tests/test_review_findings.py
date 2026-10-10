@@ -367,6 +367,105 @@ async def test_f5b_pre_checkout_strict_validation(
     query.answer.assert_called_with(ok=False, error_message="Valyuta faqat UZS bo'lishi kerak.")
 
 
+@pytest.mark.asyncio
+async def test_f5b_pre_checkout_reject_reasons_and_accept(
+    db_session, sample_barber, sample_clients, mock_notifier
+):
+    """M2 acceptance: one test per reject reason and one for the accept case."""
+    qs = QueueService(db_session, notifier=mock_notifier)
+    svc = sample_barber.services[0]
+    client = sample_clients[0]
+    other_client = sample_clients[1]
+
+    order = await qs.join_queue(sample_barber.id, svc.id, client, pay_now=False)
+    await qs.client_arrived(order.id)
+    await qs.complete_service(order.id)
+    await db_session.commit()
+
+    # 1. Accept case: pay-after client paying after service
+    q_accept = MagicMock()
+    q_accept.invoice_payload = f"order_{order.id}_CLICK"
+    q_accept.total_amount = order.price * 100
+    q_accept.currency = "UZS"
+    q_accept.from_user.id = client.telegram_id
+    q_accept.answer = AsyncMock()
+    await handle_pre_checkout(q_accept, db_session)
+    q_accept.answer.assert_called_with(ok=True)
+
+    # 2. Reject: foreign payer
+    q_foreign = MagicMock()
+    q_foreign.invoice_payload = f"order_{order.id}_CLICK"
+    q_foreign.total_amount = order.price * 100
+    q_foreign.currency = "UZS"
+    q_foreign.from_user.id = other_client.telegram_id
+    q_foreign.answer = AsyncMock()
+    await handle_pre_checkout(q_foreign, db_session)
+    assert q_foreign.answer.call_args.kwargs.get("ok") is False
+
+    # 3. Reject: malformed payload
+    q_malformed = MagicMock()
+    q_malformed.invoice_payload = "invalid_payload"
+    q_malformed.total_amount = order.price * 100
+    q_malformed.currency = "UZS"
+    q_malformed.from_user.id = client.telegram_id
+    q_malformed.answer = AsyncMock()
+    await handle_pre_checkout(q_malformed, db_session)
+    assert q_malformed.answer.call_args.kwargs.get("ok") is False
+
+    # 4. Reject: order not found
+    q_not_found = MagicMock()
+    q_not_found.invoice_payload = "order_999999_CLICK"
+    q_not_found.total_amount = order.price * 100
+    q_not_found.currency = "UZS"
+    q_not_found.from_user.id = client.telegram_id
+    q_not_found.answer = AsyncMock()
+    await handle_pre_checkout(q_not_found, db_session)
+    assert q_not_found.answer.call_args.kwargs.get("ok") is False
+
+    # 5. Reject: amount mismatch
+    q_amount = MagicMock()
+    q_amount.invoice_payload = f"order_{order.id}_CLICK"
+    q_amount.total_amount = 1000  # wrong amount
+    q_amount.currency = "UZS"
+    q_amount.from_user.id = client.telegram_id
+    q_amount.answer = AsyncMock()
+    await handle_pre_checkout(q_amount, db_session)
+    assert q_amount.answer.call_args.kwargs.get("ok") is False
+
+    # 6. Reject: order already PAID
+    ps = PaymentService(db_session, notifier=mock_notifier)
+    await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="tx_test_already_paid",
+        amount=order.price,
+        order_id=order.id,
+    )
+    await db_session.commit()
+
+    q_already_paid = MagicMock()
+    q_already_paid.invoice_payload = f"order_{order.id}_CLICK"
+    q_already_paid.total_amount = order.price * 100
+    q_already_paid.currency = "UZS"
+    q_already_paid.from_user.id = client.telegram_id
+    q_already_paid.answer = AsyncMock()
+    await handle_pre_checkout(q_already_paid, db_session)
+    assert q_already_paid.answer.call_args.kwargs.get("ok") is False
+
+    # 7. Reject: cancelled order
+    order2 = await qs.join_queue(sample_barber.id, svc.id, other_client, pay_now=False)
+    await qs.cancel_by_client(order2.id, other_client.id)
+    await db_session.commit()
+
+    q_cancelled = MagicMock()
+    q_cancelled.invoice_payload = f"order_{order2.id}_CLICK"
+    q_cancelled.total_amount = order2.price * 100
+    q_cancelled.currency = "UZS"
+    q_cancelled.from_user.id = other_client.telegram_id
+    q_cancelled.answer = AsyncMock()
+    await handle_pre_checkout(q_cancelled, db_session)
+    assert q_cancelled.answer.call_args.kwargs.get("ok") is False
+
+
 # ---------------------------------------------------------------------------
 # F6 (D2): Owner alert spam prevented with persisted marker stale_alerted_at
 # ---------------------------------------------------------------------------

@@ -6,8 +6,10 @@ from aiogram import Bot, F, Router
 from aiogram.types import Message, PreCheckoutQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.enums import OrderStatus
+from app.i18n import t
+from app.models.enums import OrderStatus, PaymentStatus
 from app.repositories.order_repo import OrderRepository
+from app.repositories.payment_repo import PaymentRepository
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
 
@@ -17,34 +19,58 @@ router = Router(name="payments_router")
 
 @router.pre_checkout_query()
 async def handle_pre_checkout(query: PreCheckoutQuery, session: AsyncSession):
-    payload = query.invoice_payload  # e.g. "order_12_CLICK"
+    lang = "uz"
+
+    # 1. Currency validation (must be UZS)
+    if query.currency != "UZS":
+        await query.answer(ok=False, error_message=t("payments.err_currency_uzs", lang=lang))
+        return
+
+    # 2. Payload format validation (e.g. "order_12_CLICK")
+    payload = query.invoice_payload or ""
     parts = payload.split("_")
-    if len(parts) < 3 or parts[0] != "order":
-        await query.answer(ok=False, error_message="Buyurtma ma'lumotlari xato.")
+    if len(parts) < 3 or parts[0] != "order" or not parts[1].isdigit():
+        await query.answer(ok=False, error_message=t("payments.err_malformed_payload", lang=lang))
         return
 
     order_id = int(parts[1])
-    parts[2]
 
+    # 3. Order existence
     order_repo = OrderRepository(session)
     order = await order_repo.get_by_id(order_id)
     if not order:
-        await query.answer(ok=False, error_message="Buyurtma topilmadi.")
+        await query.answer(ok=False, error_message=t("payments.err_order_not_found", lang=lang))
         return
 
+    if order.client:
+        lang = order.client.language
+
+    # 4. Payer must be the order's client
+    if order.client and order.client.telegram_id != query.from_user.id:
+        await query.answer(ok=False, error_message=t("payments.err_foreign_payer", lang=lang))
+        return
+
+    # 5. Order status check (not cancelled or expired)
     if order.status in [
         OrderStatus.CANCELLED_BY_CLIENT.value,
         OrderStatus.CANCELLED_BY_STAFF.value,
         OrderStatus.CANCELLED_NO_SHOW.value,
         OrderStatus.EXPIRED.value,
     ]:
-        await query.answer(ok=False, error_message="Ushbu buyurtma bekor qilingan.")
+        await query.answer(ok=False, error_message=t("payments.err_order_cancelled", lang=lang))
         return
 
-    # In Telegram payments, amount is in smallest unit (tiyin: order.price * 100)
+    # 6. Check if order already has a PAID payment
+    pay_repo = PaymentRepository(session)
+    existing_paid = await pay_repo.get_by_order_id(order.id)
+    if existing_paid and existing_paid.status == PaymentStatus.PAID.value:
+        await query.answer(ok=False, error_message=t("payments.err_already_paid", lang=lang))
+        return
+
+    # 7. Exact amount verification in tiyin (total_amount == price * 100)
     expected_amount = order.price * 100
     if query.total_amount != expected_amount:
-        await query.answer(ok=False, error_message="To'lov miqdori mos kelmadi.")
+        await query.answer(ok=False, error_message=t("payments.err_amount_mismatch", lang=lang))
         return
 
     await query.answer(ok=True)

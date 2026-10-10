@@ -139,3 +139,15 @@ onboarding:
   barber_phone_request: "Iltimos, telefon raqamingizni yuboring (tugmani bosing):"
   barber_photo_request: "Iltimos, profilingiz uchun fotosurat yuboring (yoki 'O'tkazib yuborish' tugmasini bosing):"
   barber_activated: "Tabriklaymiz! Siz muvaffaqiyatli barber sifatida ro'yxatdan o'tdingiz."
+
+payments:
+  err_malformed_payload: "Buyurtma ma'lumotlari xato."
+  err_order_not_found: "Buyurtma topilmadi."
+  err_order_cancelled: "Ushbu buyurtma bekor qilingan."
+  err_amount_mismatch: "To'lov miqdori mos kelmadi."
+  err_currency_uzs: "Valyuta faqat UZS bo'lishi kerak."
+  err_already_paid: "Ushbu buyurtma uchun to'lov allaqachon qabul qilingan."
+  err_foreign_payer: "To'lov faqat buyurtma egasi tomonidan amalga oshirilishi mumkin."
+  refund_pending_notify_owner: "⚠️ Buyurtma #{order_id} bekor qilindi. To'lov qaytarilishi kerak: {amount} so'm ({method})."
+  refund_pending_notify_client: "⚠️ Buyurtmangiz bekor qilindi. To'langan mablag' ({amount} so'm) tez orada qaytariladi."
+  refund_duplicate_notify_owner: "⚠️ Buyurtma #{order_id} uchun ortiqcha to'lov keldi ({charge_id}): {amount} so'm ({method}). Qaytarish kutilmoqda."

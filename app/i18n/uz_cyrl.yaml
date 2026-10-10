@@ -139,3 +139,15 @@ onboarding:
   barber_phone_request: "Илтимос, телефон рақамингизни юборинг (тугмани босинг):"
   barber_photo_request: "Илтимос, профилингиз учун фотосурат юборинг (ёки 'Ўтказиб юбориш' тугмасини босинг):"
   barber_activated: "Табриклаймиз! Сиз муваффақиятли барбер сифатида рўйхатдан ўтдингиз."
+
+payments:
+  err_malformed_payload: "Буюртма маълумотлари хато."
+  err_order_not_found: "Буюртма топилмади."
+  err_order_cancelled: "Ушбу буюртма бекор қилинган."
+  err_amount_mismatch: "Тўлов миқдори мос келмади."
+  err_currency_uzs: "Валюта фақат UZS бўлиши керак."
+  err_already_paid: "Ушбу буюртма учун тўлов аллақачон қабул қилинган."
+  err_foreign_payer: "Тўлов фақат буюртма эгаси томонидан амалга оширилиши мумкин."
+  refund_pending_notify_owner: "⚠️ Буюртма #{order_id} бекор қилинди. Тўлов қайтарилиши керак: {amount} сўм ({method})."
+  refund_pending_notify_client: "⚠️ Буюртмангиз бекор қилинди. Тўланган маблағ ({amount} сўм) тез орада қайтарилади."
+  refund_duplicate_notify_owner: "⚠️ Буюртма #{order_id} учун ортиқча тўлов келди ({charge_id}): {amount} сўм ({method}). Қайтариш кутилмоқда."
