@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import timedelta
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +42,27 @@ class BarberClosedError(QueueException):
 
 class CannotCancelInServiceError(QueueException):
     pass
+
+
+class TransitionResult(tuple):
+    def __new__(cls, order: Order | None, changed: bool):
+        return super().__new__(cls, (order, changed))
+
+    @property
+    def order(self) -> Order | None:
+        return self[0]
+
+    @property
+    def changed(self) -> bool:
+        return self[1]
+
+    def __bool__(self) -> bool:
+        return self[0] is not None
+
+    def __getattr__(self, name: str) -> Any:
+        if self[0] is not None and hasattr(self[0], name):
+            return getattr(self[0], name)
+        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
 
 class QueueService:
@@ -342,16 +364,21 @@ class QueueService:
                 if ahead == settings.HEADS_UP_AHEAD:
                     await self._send_heads_up(o, barber, ahead)
 
-    async def client_arrived(self, order_id: int) -> Order | None:
+    async def client_arrived(self, order_id: int) -> TransitionResult:
         """Barber clicks 'Keldi' on a CALLED order."""
         order = await self.order_repo.get_by_id(order_id)
         if not order:
-            return None
+            return TransitionResult(None, False)
 
         await self.barber_repo.lock_barber_for_update(order.barber_id)
+        # Re-read order after acquiring barber lock
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            return TransitionResult(None, False)
+
         # Idempotent: only act if currently CALLED
         if order.status != OrderStatus.CALLED.value:
-            return order
+            return TransitionResult(order, False)
 
         order.status = OrderStatus.IN_SERVICE.value
         order.started_at = now_utc()
@@ -364,18 +391,23 @@ class QueueService:
             entity="Order",
             entity_id=str(order.id),
         )
-        return order
+        return TransitionResult(order, True)
 
-    async def complete_service(self, order_id: int) -> Order | None:
+    async def complete_service(self, order_id: int) -> TransitionResult:
         """Barber clicks 'Xizmat ko'rsatildi' on an IN_SERVICE order."""
         order = await self.order_repo.get_by_id(order_id)
         if not order:
-            return None
+            return TransitionResult(None, False)
 
         await self.barber_repo.lock_barber_for_update(order.barber_id)
+        # Re-read order after acquiring barber lock
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            return TransitionResult(None, False)
+
         # Idempotent: only act if currently IN_SERVICE
         if order.status != OrderStatus.IN_SERVICE.value:
-            return order
+            return TransitionResult(order, False)
 
         order.status = OrderStatus.COMPLETED.value
         order.completed_at = now_utc()
@@ -390,7 +422,7 @@ class QueueService:
 
         # Call next client
         await self.call_next_if_free(order.barber_id)
-        return order
+        return TransitionResult(order, True)
 
     async def handle_lateness(self, order_id: int) -> Order | None:
         """

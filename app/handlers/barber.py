@@ -30,7 +30,7 @@ from app.services.authorization import (
     assert_can_manage_service,
 )
 from app.services.notification_service import NotificationService
-from app.services.payment_service import PaymentService
+from app.services.payment_service import PaymentException, PaymentService
 from app.services.queue_service import QueueService
 from app.utils.formatting import format_money
 from app.utils.time_utils import format_datetime, format_time, now_utc
@@ -241,45 +241,58 @@ async def handle_b_done(call: CallbackQuery, session: AsyncSession, user: User, 
         return
 
     qs = QueueService(session, notifier=NotificationService(bot=bot))
-    order = await qs.complete_service(order_id)
+    order, changed = await qs.complete_service(order_id)
     await session.commit()
 
-    if order:
-        await call.answer(t("barber.done_success", lang=lang, ticket_no=order.ticket_no))
+    if not order:
+        await call.answer(t("common.order_not_found", lang=lang), show_alert=True)
+        return
+
+    # N2: only send pay prompt/receipt if changed is True and status == COMPLETED
+    if not changed or order.status != OrderStatus.COMPLETED.value:
+        await call.answer(t("barber.order_already_processed", lang=lang), show_alert=True)
         if call.message and hasattr(call.message, "delete"):
             try:
                 await call.message.delete()
             except Exception:
                 pass
+        return
 
-        # If order is completed and unpaid, prompt client with payment options;
-        # if already paid, send thank-you/receipt only without payment keyboard
-        payment_repo = PaymentRepository(session)
-        payment = await payment_repo.get_by_order_id(order.id)
-        if not payment or payment.status != PaymentStatus.PAID.value:
-            if order.client:
-                pay_prompt = t(
-                    "client.service_completed_pay_prompt",
-                    lang=order.client.language,
-                    amount=order.price,
-                )
-                markup = get_payment_methods_keyboard(order.id, lang=order.client.language)
-                await bot.send_message(
-                    chat_id=order.client.telegram_id,
-                    text=pay_prompt,
-                    reply_markup=markup,
-                )
-        else:
-            if order.client:
-                receipt_text = t(
-                    "client.service_completed_receipt",
-                    lang=order.client.language,
-                    amount=order.price,
-                )
-                await bot.send_message(
-                    chat_id=order.client.telegram_id,
-                    text=receipt_text,
-                )
+    await call.answer(t("barber.done_success", lang=lang, ticket_no=order.ticket_no))
+    if call.message and hasattr(call.message, "delete"):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+
+    # If order is completed and unpaid, prompt client with payment options;
+    # if already paid, send thank-you/receipt only without payment keyboard
+    payment_repo = PaymentRepository(session)
+    payment = await payment_repo.get_paid_by_order_id(order.id)
+    if not payment:
+        if order.client:
+            pay_prompt = t(
+                "client.service_completed_pay_prompt",
+                lang=order.client.language,
+                amount=order.price,
+            )
+            markup = get_payment_methods_keyboard(order.id, lang=order.client.language)
+            await bot.send_message(
+                chat_id=order.client.telegram_id,
+                text=pay_prompt,
+                reply_markup=markup,
+            )
+    else:
+        if order.client:
+            receipt_text = t(
+                "client.service_completed_receipt",
+                lang=order.client.language,
+                amount=order.price,
+            )
+            await bot.send_message(
+                chat_id=order.client.telegram_id,
+                text=receipt_text,
+            )
 
 
 @router.callback_query(F.data.startswith("b_cash:"))
@@ -308,9 +321,20 @@ async def handle_b_cash(call: CallbackQuery, session: AsyncSession, user: User, 
         await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
         return
 
+    # N2: only allow cash confirmation when order is COMPLETED
+    if order.status != OrderStatus.COMPLETED.value:
+        logger.warning("Attempted cash confirmation on order #%d in status %s", order.id, order.status)
+        await call.answer(t("payments.err_order_not_completed", lang=lang), show_alert=True)
+        return
+
     payment_service = PaymentService(session, notifier=NotificationService(bot=bot))
-    payment = await payment_service.confirm_cash_payment(order_id, user.id)
-    await session.commit()
+    try:
+        payment = await payment_service.confirm_cash_payment(order_id, user.id)
+        await session.commit()
+    except PaymentException as exc:
+        logger.warning("Cash confirmation failed for order #%d: %s", order_id, exc)
+        await call.answer(t("payments.err_already_paid", lang=lang), show_alert=True)
+        return
 
     ticket_no = order.ticket_no if order else order_id
     amount_str = format_money(payment.amount)
