@@ -178,3 +178,5 @@ payments:
   refund_pending_notify_owner: "⚠️ Заказ #{order_id} отменен. Требуется возврат: {amount} so'm ({method})."
   refund_pending_notify_client: "⚠️ Ваш заказ отменен. Оплаченная сумма ({amount} so'm) скоро будет возвращена."
   refund_duplicate_notify_owner: "⚠️ Поступил повторный платеж по заказу #{order_id} ({charge_id}): {amount} so'm ({method}). Ожидает возврата."
+  amount_mismatch_notify_owner: "⚠️ Неверная сумма платежа по заказу #{order_id} ({charge_id}): {amount} so'm (ожидалось: {expected} so'm). Ожидает возврата."
+  critical_failure_notify_owner: "🚨 ВНИМАНИЕ: Ошибка при записи платежа! Заказ #{order_id}, ID платежа: {charge_id}, сумма: {amount} so'm, метод: {method}. Ошибка: {error}"

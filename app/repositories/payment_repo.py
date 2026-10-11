@@ -58,6 +58,7 @@ class PaymentRepository:
                 selectinload(Payment.barber),
                 selectinload(Payment.client),
             )
+            .execution_options(populate_existing=True)
         )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
@@ -71,6 +72,7 @@ class PaymentRepository:
                 selectinload(Payment.barber),
                 selectinload(Payment.client),
             )
+            .execution_options(populate_existing=True)
         )
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
@@ -86,6 +88,7 @@ class PaymentRepository:
                 selectinload(Payment.barber),
                 selectinload(Payment.client),
             )
+            .execution_options(populate_existing=True)
             .order_by(
                 case((Payment.status == PaymentStatus.PAID.value, 0), else_=1),
                 Payment.id.asc(),
@@ -93,6 +96,25 @@ class PaymentRepository:
         )
         res = await self.session.execute(stmt)
         return res.scalars().first()
+
+    async def get_paid_by_order_id(self, order_id: int) -> Payment | None:
+        stmt = (
+            select(Payment)
+            .where(
+                and_(
+                    Payment.order_id == order_id,
+                    Payment.status == PaymentStatus.PAID.value,
+                )
+            )
+            .options(
+                selectinload(Payment.order),
+                selectinload(Payment.barber),
+                selectinload(Payment.client),
+            )
+            .execution_options(populate_existing=True)
+        )
+        res = await self.session.execute(stmt)
+        return res.scalar_one_or_none()
 
     async def get_barber_payments(
         self, barber_id: int, limit: int = 20

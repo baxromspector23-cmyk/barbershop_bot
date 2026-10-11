@@ -178,3 +178,5 @@ payments:
   refund_pending_notify_owner: "⚠️ Buyurtma #{order_id} bekor qilindi. To'lov qaytarilishi kerak: {amount} so'm ({method})."
   refund_pending_notify_client: "⚠️ Buyurtmangiz bekor qilindi. To'langan mablag' ({amount} so'm) tez orada qaytariladi."
   refund_duplicate_notify_owner: "⚠️ Buyurtma #{order_id} uchun ortiqcha to'lov keldi ({charge_id}): {amount} so'm ({method}). Qaytarish kutilmoqda."
+  amount_mismatch_notify_owner: "⚠️ Buyurtma #{order_id} uchun noto'g'ri summa keldi ({charge_id}): {amount} so'm (kutilgan: {expected} so'm). Qaytarish kutilmoqda."
+  critical_failure_notify_owner: "🚨 DIQQAT: To'lovni yozishda xatolik yuz berdi! Buyurtma #{order_id}, to'lov ID: {charge_id}, summa: {amount} so'm, usul: {method}. Xato: {error}"

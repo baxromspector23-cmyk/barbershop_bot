@@ -178,3 +178,5 @@ payments:
   refund_pending_notify_owner: "⚠️ Буюртма #{order_id} бекор қилинди. Тўлов қайтарилиши керак: {amount} сўм ({method})."
   refund_pending_notify_client: "⚠️ Буюртмангиз бекор қилинди. Тўланган маблағ ({amount} сўм) тез орада қайтарилади."
   refund_duplicate_notify_owner: "⚠️ Буюртма #{order_id} учун ортиқча тўлов келди ({charge_id}): {amount} сўм ({method}). Қайтариш кутилмоқда."
+  amount_mismatch_notify_owner: "⚠️ Буюртма #{order_id} учун нотўғри сумма келди ({charge_id}): {amount} сўм (кутилган: {expected} сўм). Қайтариш кутилмоқда."
+  critical_failure_notify_owner: "🚨 ДИҚҚАТ: Тўловни ёзишда хатолик юз берди! Буюртма #{order_id}, тўлов ID: {charge_id}, сумма: {amount} сўм, усул: {method}. Хато: {error}"
