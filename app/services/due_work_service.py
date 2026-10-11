@@ -10,6 +10,7 @@ from app.config import settings
 from app.i18n import t
 from app.models.enums import OrderStatus
 from app.repositories.order_repo import OrderRepository
+from app.repositories.user_repo import UserRepository
 from app.services.notification_service import NotificationService
 from app.services.queue_service import QueueService
 from app.utils.time_utils import now_utc, tashkent_today
@@ -164,18 +165,31 @@ async def process_due_work(
 
     # Report unclosed in-service orders to owner
     if unclosed_in_service_items and owner_ids:
-        report_text = (
-            "⚠️ Diqqat! Kechagi kundan yakunlanmagan (IN_SERVICE) buyurtmalar mavjud:\n"
-            + "\n".join(unclosed_in_service_items)
-        )
-        buttons = []
-        for oid_item, ticket_no in unclosed_in_service_order_ids:
-            buttons.append([
-                InlineKeyboardButton(text=f"✂️ Tugatish #{ticket_no}", callback_data=f"b_done:{oid_item}"),
-                InlineKeyboardButton(text=f"🚫 Bekor #{ticket_no}", callback_data=f"b_cancel:{oid_item}"),
-            ])
-        markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
         for oid in owner_ids:
+            lang = "uz"
+            async with session_factory() as s:
+                user = await UserRepository(s).get_by_telegram_id(oid)
+                if user and user.language:
+                    lang = user.language
+
+            report_text = t(
+                "owner.unclosed_in_service_alert",
+                lang=lang,
+                items="\n".join(unclosed_in_service_items),
+            )
+            buttons = []
+            for oid_item, ticket_no in unclosed_in_service_order_ids:
+                buttons.append([
+                    InlineKeyboardButton(
+                        text=t("owner.btn_finish_order", lang=lang, ticket_no=ticket_no),
+                        callback_data=f"b_done:{oid_item}",
+                    ),
+                    InlineKeyboardButton(
+                        text=t("owner.btn_cancel_order", lang=lang, ticket_no=ticket_no),
+                        callback_data=f"b_cancel:{oid_item}",
+                    ),
+                ])
+            markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
             await notifier.send_message(oid, report_text, reply_markup=markup)
 
     return results

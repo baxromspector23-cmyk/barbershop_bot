@@ -158,6 +158,9 @@ owner:
   admin_revoked: "Barber adminlik huquqi olindi va faolsizlantirildi."
   cannot_revoke_self: "Egasi (Owner) o'z huquqini bekor qila olmaydi."
   day_status_updated: "Kun holati yangilandi!"
+  unclosed_in_service_alert: "⚠️ Diqqat! Kechagi kundan yakunlanmagan (IN_SERVICE) buyurtmalar mavjud:\n{items}"
+  btn_finish_order: "✂️ Tugatish #{ticket_no}"
+  btn_cancel_order: "🚫 Bekor #{ticket_no}"
   err_time_format: "Xato format! Iltimos, HH:MM-HH:MM formatida kiriting (masalan: 09:00-20:00):"
   err_time_order: "Boshlanish vaqti tugash vaqtidan oldin bo'lishi kerak! Qaytadan kiriting:"
 

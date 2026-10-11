@@ -17,6 +17,7 @@ from app.repositories.audit_repo import AuditRepository
 from app.repositories.barber_repo import BarberRepository
 from app.repositories.order_repo import OrderRepository
 from app.repositories.payment_repo import PaymentRepository
+from app.repositories.user_repo import UserRepository
 from app.services.notification_service import NotificationService
 from app.utils.formatting import format_money
 from app.utils.time_utils import (
@@ -66,14 +67,6 @@ class TransitionResult(tuple):
 
 
 class QueueService:
-    _barber_locks: dict[int, asyncio.Lock] = {}
-
-    @classmethod
-    def get_lock(cls, barber_id: int) -> asyncio.Lock:
-        if barber_id not in cls._barber_locks:
-            cls._barber_locks[barber_id] = asyncio.Lock()
-        return cls._barber_locks[barber_id]
-
     def __init__(
         self,
         session: AsyncSession,
@@ -85,6 +78,7 @@ class QueueService:
         self.order_repo = OrderRepository(session)
         self.payment_repo = PaymentRepository(session)
         self.audit_repo = AuditRepository(session)
+        self.user_repo = UserRepository(session)
 
     # ---------------------------------------------------------
     # Metrics & Estimation
@@ -171,75 +165,73 @@ class QueueService:
         - Assigns position_key and daily ticket_no
         - Calls client immediately if barber is free and not pay_now
         """
-        lock = self.get_lock(barber_id)
-        async with lock:
-            barber = await self.barber_repo.lock_barber_for_update(barber_id)
-            if not barber:
-                raise QueueException(f"Barber #{barber_id} not found")
+        barber = await self.barber_repo.lock_barber_for_update(barber_id)
+        if not barber:
+            raise QueueException(f"Barber #{barber_id} not found")
 
-            # Check client active order
-            if client:
-                active_existing = await self.order_repo.get_active_order_for_client(client.id)
-                if active_existing:
-                    raise AlreadyInQueueError("Client already has an active order")
+        # Check client active order
+        if client:
+            active_existing = await self.order_repo.get_active_order_for_client(client.id)
+            if active_existing:
+                raise AlreadyInQueueError("Client already has an active order")
 
-            # Get active orders to check queue wait & schedule
-            active_orders = await self.order_repo.get_active_orders_for_barber(barber_id)
-            est_wait = self.calculate_active_wait_time(active_orders)
+        # Get active orders to check queue wait & schedule
+        active_orders = await self.order_repo.get_active_orders_for_barber(barber_id)
+        est_wait = self.calculate_active_wait_time(active_orders)
 
-            if not self.is_barber_open(barber, est_wait):
-                raise BarberClosedError("Barber is currently unavailable or closed")
+        if not self.is_barber_open(barber, est_wait):
+            raise BarberClosedError("Barber is currently unavailable or closed")
 
-            # Fetch service
-            service = await self.barber_repo.get_service_by_id(service_id)
-            if not service or service.barber_id != barber_id:
-                raise QueueException(f"Service #{service_id} not valid for barber #{barber_id}")
+        # Fetch service
+        service = await self.barber_repo.get_service_by_id(service_id)
+        if not service or service.barber_id != barber_id:
+            raise QueueException(f"Service #{service_id} not valid for barber #{barber_id}")
 
-            next_pos_key = await self.order_repo.get_next_position_key(barber_id)
-            today_date = tashkent_today()
-            next_ticket = await self.order_repo.get_next_ticket_no(barber_id, today_date)
+        next_pos_key = await self.order_repo.get_next_position_key(barber_id)
+        today_date = tashkent_today()
+        next_ticket = await self.order_repo.get_next_ticket_no(barber_id, today_date)
 
-            initial_status = (
-                OrderStatus.PENDING_PAYMENT.value if pay_now else OrderStatus.WAITING.value
-            )
+        initial_status = (
+            OrderStatus.PENDING_PAYMENT.value if pay_now else OrderStatus.WAITING.value
+        )
 
-            order = Order(
-                barber_id=barber_id,
-                client_id=client.id if client else None,
-                walkin_name=walkin_name,
-                walkin_phone=walkin_phone,
-                service_id=service.id,
-                service_name=service.name,
-                price=service.price,
-                duration_minutes=service.duration_minutes,
-                status=initial_status,
-                position_key=next_pos_key,
-                ticket_no=next_ticket,
-                ticket_date=today_date,
-                late_count=0,
-                heads_up_sent=False,
-                created_at=now_utc(),
-            )
-            self.session.add(order)
-            await self.session.flush()
+        order = Order(
+            barber_id=barber_id,
+            client_id=client.id if client else None,
+            walkin_name=walkin_name,
+            walkin_phone=walkin_phone,
+            service_id=service.id,
+            service_name=service.name,
+            price=service.price,
+            duration_minutes=service.duration_minutes,
+            status=initial_status,
+            position_key=next_pos_key,
+            ticket_no=next_ticket,
+            ticket_date=today_date,
+            late_count=0,
+            heads_up_sent=False,
+            created_at=now_utc(),
+        )
+        self.session.add(order)
+        await self.session.flush()
 
-            # If paying later (enters queue immediately)
-            if not pay_now:
-                await self._on_order_entered_queue(order, barber, active_orders)
+        # If paying later (enters queue immediately)
+        if not pay_now:
+            await self._on_order_entered_queue(order, barber, active_orders)
 
-            await self.audit_repo.log(
-                actor_user_id=client.id if client else None,
-                action="ORDER_JOINED",
-                entity="Order",
-                entity_id=str(order.id),
-                data={
-                    "barber_id": barber_id,
-                    "ticket_no": next_ticket,
-                    "status": initial_status,
-                    "pay_now": pay_now,
-                },
-            )
-            return order
+        await self.audit_repo.log(
+            actor_user_id=client.id if client else None,
+            action="ORDER_JOINED",
+            entity="Order",
+            entity_id=str(order.id),
+            data={
+                "barber_id": barber_id,
+                "ticket_no": next_ticket,
+                "status": initial_status,
+                "pay_now": pay_now,
+            },
+        )
+        return order
 
     async def activate_prepaid_order(self, order_id: int) -> Order:
         """Transition PENDING_PAYMENT -> WAITING and handle calling/heads-up."""
@@ -623,9 +615,11 @@ class QueueService:
 
             amount_fmt = format_money(payment.amount)
             for owner_id in settings.OWNER_TELEGRAM_IDS:
+                owner_user = await self.user_repo.get_by_telegram_id(owner_id)
+                owner_lang = owner_user.language if (owner_user and owner_user.language) else "uz"
                 owner_text = t(
                     "payments.refund_pending_notify_owner",
-                    "uz",
+                    lang=owner_lang,
                     order_id=order.id,
                     amount=amount_fmt,
                     method=payment.method,

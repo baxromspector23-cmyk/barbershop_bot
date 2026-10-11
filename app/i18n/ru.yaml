@@ -158,6 +158,9 @@ owner:
   admin_revoked: "Права администратора барбера отозваны."
   cannot_revoke_self: "Владелец не может отозвать свои права."
   day_status_updated: "Статус дня обновлен!"
+  unclosed_in_service_alert: "⚠️ Внимание! Есть незавершенные заказы (IN_SERVICE) за прошлые дни:\n{items}"
+  btn_finish_order: "✂️ Завершить #{ticket_no}"
+  btn_cancel_order: "🚫 Отменить #{ticket_no}"
   err_time_format: "Неверный формат! Пожалуйста, введите в формате ЧЧ:ММ-ЧЧ:ММ (например: 09:00-20:00):"
   err_time_order: "Время начала должно быть раньше времени окончания! Введите снова:"
 

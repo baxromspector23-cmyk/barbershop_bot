@@ -158,6 +158,9 @@ owner:
   admin_revoked: "Барбер админлик ҳуқуқи олинди ва фаолсизлантирилди."
   cannot_revoke_self: "Эгаси (Owner) ўз ҳуқуқини бекор қила олмайди."
   day_status_updated: "Кун ҳолати янгиланди!"
+  unclosed_in_service_alert: "⚠️ Диққат! Кечаги кундан якунланмаган (IN_SERVICE) буюртмалар мавжуд:\n{items}"
+  btn_finish_order: "✂️ Тугатиш #{ticket_no}"
+  btn_cancel_order: "🚫 Бекор #{ticket_no}"
   err_time_format: "Хато формат! Илтимос, HH:MM-HH:MM форматида киритинг (масалан: 09:00-20:00):"
   err_time_order: "Бошланиш вақти тугаш вақтидан олдин бўлиши керак! Қайтадан киритинг:"
 
