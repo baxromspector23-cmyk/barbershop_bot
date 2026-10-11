@@ -14,8 +14,8 @@ WORKDIR /app
 RUN useradd -m -u 1000 appuser
 
 # Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt requirements.lock* .
+RUN if [ -f requirements.lock ]; then pip install --no-cache-dir -r requirements.lock; else pip install --no-cache-dir -r requirements.txt; fi
 
 # Copy application source
 COPY . .

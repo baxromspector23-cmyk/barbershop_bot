@@ -21,6 +21,8 @@ env/
 
 # Distribution and archives
 dist/
+*.egg-info/
+build/
 *.zip
 
 # OS artifacts

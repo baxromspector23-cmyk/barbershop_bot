@@ -33,6 +33,7 @@ ALLOWLIST_TOP_FILES = [
     "pyproject.toml",
     "README.md",
     "requirements.txt",
+    "requirements.lock",
 ]
 
 ALLOWLIST_DIRS = [
