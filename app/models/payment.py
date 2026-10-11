@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -58,4 +59,11 @@ class Payment(Base):
     __table_args__ = (
         UniqueConstraint("method", "provider_payment_id", name="uq_payment_method_provider_id"),
         Index("ix_payment_revenue", "status", "paid_at"),
+        Index(
+            "uq_one_paid_per_order",
+            "order_id",
+            unique=True,
+            postgresql_where=text("status = 'PAID'"),
+            sqlite_where=text("status = 'PAID'"),
+        ),
     )
