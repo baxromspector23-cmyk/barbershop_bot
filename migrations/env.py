@@ -22,7 +22,8 @@ target_metadata = Base.metadata
 
 def get_migration_url() -> str:
     url = (
-        os.environ.get("DATABASE_DIRECT_URL")
+        config.get_main_option("sqlalchemy.url")
+        or os.environ.get("DATABASE_DIRECT_URL")
         or os.environ.get("DATABASE_URL")
         or settings.DATABASE_DIRECT_URL
         or settings.DATABASE_URL

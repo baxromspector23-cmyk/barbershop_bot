@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import os
 from collections.abc import AsyncGenerator
 from datetime import time
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import select
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import select, text
+from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
     async_sessionmaker,
@@ -22,7 +27,18 @@ from app.models.service import Service
 from app.models.user import User
 from app.services.notification_service import NotificationService
 
+ROOT = Path(__file__).resolve().parent.parent
 TEST_DB_URL = os.environ.get("TEST_DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+
+if os.environ.get("REQUIRE_PG") == "1" and "postgresql" not in TEST_DB_URL:
+    raise RuntimeError("REQUIRE_PG=1 was specified, but TEST_DATABASE_URL is not PostgreSQL")
+
+if "postgresql" in TEST_DB_URL:
+    parsed_url = make_url(TEST_DB_URL)
+    if not (parsed_url.database and parsed_url.database.endswith("_test")):
+        raise RuntimeError(
+            f"Safety check failed: PostgreSQL database name '{parsed_url.database}' must end with '_test'"
+        )
 
 
 @pytest_asyncio.fixture(scope="function")
@@ -36,14 +52,29 @@ async def test_engine():
 
     engine = create_async_engine(TEST_DB_URL, **kwargs)
 
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
+    if "postgresql" in TEST_DB_URL:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
+
+        def run_upgrade():
+            cfg = Config(str(ROOT / "alembic.ini"))
+            cfg.set_main_option("script_location", str(ROOT / "migrations"))
+            cfg.set_main_option("sqlalchemy.url", TEST_DB_URL)
+            command.upgrade(cfg, "head")
+
+        await asyncio.to_thread(run_upgrade)
+    else:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+            await conn.run_sync(Base.metadata.create_all)
 
     yield engine
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        if "postgresql" in TEST_DB_URL:
+            await conn.execute(text("DROP TABLE IF EXISTS alembic_version CASCADE"))
 
     await engine.dispose()
 

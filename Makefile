@@ -19,13 +19,14 @@ down:
 	docker compose down
 
 test:
+	python scripts/verify_review_tests.py
 	python -m pytest tests/ -v
 
 test-all: test
 
 test-pg:
 	docker compose -f docker-compose.test.yml up -d
-	DATABASE_URL="postgresql+asyncpg://postgres_test:test_secret_password_for_pg16@localhost:5433/barbershop_test" python -m pytest tests/ -v
+	TEST_DATABASE_URL="postgresql+asyncpg://postgres_test:test_secret_password_for_pg16@localhost:5433/barbershop_test" REQUIRE_PG=1 python -m pytest tests/ -v
 	docker compose -f docker-compose.test.yml down
 
 lint:
