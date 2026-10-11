@@ -40,8 +40,8 @@ class Barber(Base):
     services: Mapped[list[Service]] = relationship(
         "Service", back_populates="barber", cascade="all, delete-orphan", lazy="selectin"
     )
-    orders: Mapped[list[Order]] = relationship("Order", back_populates="barber", lazy="selectin")
-    payments: Mapped[list[Payment]] = relationship("Payment", back_populates="barber", lazy="selectin")
+    orders: Mapped[list[Order]] = relationship("Order", back_populates="barber", lazy="select")
+    payments: Mapped[list[Payment]] = relationship("Payment", back_populates="barber", lazy="select")
 
 
 class BarberWorkingHours(Base):

@@ -248,6 +248,10 @@ class QueueService:
             return order
 
         barber = await self.barber_repo.lock_barber_for_update(order.barber_id)
+        order = await self.order_repo.get_by_id(order_id)
+        if not order or order.status != OrderStatus.PENDING_PAYMENT.value:
+            return order
+
         active_orders = await self.order_repo.get_active_orders_for_barber(order.barber_id)
 
         # Update position key to current end of queue to preserve arrival ordering
@@ -445,6 +449,9 @@ class QueueService:
             return None
 
         await self.barber_repo.lock_barber_for_update(order.barber_id)
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            return None
         if order.status != OrderStatus.CALLED.value:
             return order
 
@@ -530,6 +537,9 @@ class QueueService:
             raise QueueException("Permission denied")
 
         await self.barber_repo.lock_barber_for_update(order.barber_id)
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            raise QueueException("Order not found")
 
         if order.status == OrderStatus.IN_SERVICE.value:
             raise CannotCancelInServiceError("Cannot cancel an order that is already in service")
@@ -565,6 +575,9 @@ class QueueService:
             raise QueueException("Order not found")
 
         await self.barber_repo.lock_barber_for_update(order.barber_id)
+        order = await self.order_repo.get_by_id(order_id)
+        if not order:
+            raise QueueException("Order not found")
 
         if order.status in [
             OrderStatus.COMPLETED.value,
