@@ -33,9 +33,9 @@ Katalogdagi `.env.example` faylidan `.env` nusxasini oling:
 ```bash
 cp .env.example .env
 ```
-`.env` faylini tahrirlang:
+`.env` faylini tahrirlang (xavfsiz 48+ belgili kalitlarni generatsiya qilish: `python -c "import secrets; print(secrets.token_urlsafe(48))"`):
 ```env
-BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrSTUvwxyz
+BOT_TOKEN=123456789:SIZNING_BOT_TOKENINGIZ
 OWNER_TELEGRAM_IDS=SIZNING_TELEGRAM_ID
 ENV=production
 RUN_MODE=polling  # yoki webhook
