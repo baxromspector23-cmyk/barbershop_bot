@@ -1,7 +1,24 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+from typing import Annotated
+
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+
+def get_env_example_data() -> dict[str, str]:
+    env_ex = Path(__file__).resolve().parent.parent / ".env.example"
+    if not env_ex.is_file():
+        return {}
+    res = {}
+    for line in env_ex.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            k, val = line.split("=", 1)
+            res[k.strip()] = val.strip()
+    return res
 
 
 class Settings(BaseSettings):
@@ -13,7 +30,7 @@ class Settings(BaseSettings):
 
     # Bot & Security
     BOT_TOKEN: str = "123456:TEST_BOT_TOKEN"
-    OWNER_TELEGRAM_IDS: list[int] = Field(default_factory=lambda: [123456789])
+    OWNER_TELEGRAM_IDS: Annotated[list[int], NoDecode] = Field(default_factory=lambda: [123456789])
 
     # Database & Cache
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/barbershop"
@@ -47,7 +64,7 @@ class Settings(BaseSettings):
     PAYNET_ENABLED: bool = False
     PAYNET_SERVICE_ID: str | None = ""
     PAYNET_SECRET_KEY: str | None = ""
-    ENABLED_PAYMENT_METHODS: list[str] = Field(
+    ENABLED_PAYMENT_METHODS: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: ["CASH", "CLICK", "PAYME"]
     )
 
@@ -55,6 +72,13 @@ class Settings(BaseSettings):
     @classmethod
     def parse_owner_ids(cls, v):
         if isinstance(v, str):
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    return [int(x) for x in parsed]
+                except Exception:
+                    pass
             ids = []
             for item in v.split(","):
                 clean = item.strip()
@@ -63,13 +87,29 @@ class Settings(BaseSettings):
             return ids
         if isinstance(v, int):
             return [v]
+        if isinstance(v, (list, tuple, set)):
+            return [int(x) for x in v]
         return v
 
     @field_validator("ENABLED_PAYMENT_METHODS", mode="before")
     @classmethod
     def parse_payment_methods(cls, v):
         if isinstance(v, str):
-            return [m.strip().upper() for m in v.split(",") if m.strip()]
+            v = v.strip()
+            if v.startswith("[") and v.endswith("]"):
+                try:
+                    parsed = json.loads(v)
+                    return [str(x).strip().upper() for x in parsed]
+                except Exception:
+                    pass
+            methods = []
+            for item in v.split(","):
+                clean = item.strip().upper()
+                if clean:
+                    methods.append(clean)
+            return methods
+        if isinstance(v, (list, tuple, set)):
+            return [str(x).strip().upper() for x in v]
         return v
 
     def validate_runtime(self) -> None:
@@ -77,17 +117,29 @@ class Settings(BaseSettings):
         violations: list[str] = []
 
         if self.ENV == "production":
-            # 1. OWNER_TELEGRAM_IDS
-            if not self.OWNER_TELEGRAM_IDS or self.OWNER_TELEGRAM_IDS == [123456789]:
-                violations.append("OWNER_TELEGRAM_IDS: default placeholder [123456789] or empty list is forbidden in production")
+            ex = get_env_example_data()
+            example_oids = {123456789, 987654321}
+            if ex.get("OWNER_TELEGRAM_IDS"):
+                for x in ex["OWNER_TELEGRAM_IDS"].split(","):
+                    if x.strip().isdigit():
+                        example_oids.add(int(x.strip()))
 
-            # 2. Secret tokens length
-            if len(self.WEBHOOK_SECRET) < 32:
-                violations.append("WEBHOOK_SECRET: must be at least 32 characters in production")
-            if len(self.WEBHOOK_PATH_SECRET) < 32:
-                violations.append("WEBHOOK_PATH_SECRET: must be at least 32 characters in production")
-            if len(self.CRON_SECRET) < 32:
-                violations.append("CRON_SECRET: must be at least 32 characters in production")
+            # 1. OWNER_TELEGRAM_IDS
+            if not self.OWNER_TELEGRAM_IDS:
+                violations.append("OWNER_TELEGRAM_IDS: empty list is forbidden in production")
+            elif any(oid in example_oids for oid in self.OWNER_TELEGRAM_IDS):
+                violations.append("OWNER_TELEGRAM_IDS: contains default example placeholder ID forbidden in production")
+
+            # 2. Secret tokens length and example checks
+            for sec_name, sec_val in [
+                ("WEBHOOK_SECRET", self.WEBHOOK_SECRET),
+                ("WEBHOOK_PATH_SECRET", self.WEBHOOK_PATH_SECRET),
+                ("CRON_SECRET", self.CRON_SECRET),
+            ]:
+                if len(sec_val) < 32:
+                    violations.append(f"{sec_name}: must be at least 32 characters in production")
+                if "CHANGE_ME" in sec_val or (sec_name in ex and sec_val == ex[sec_name]):
+                    violations.append(f"{sec_name}: cannot use public placeholder/example secret in production")
 
             # 3. DATABASE_URL
             if not self.DATABASE_URL.startswith("postgresql+asyncpg://"):
@@ -106,8 +158,22 @@ class Settings(BaseSettings):
                 violations.append("PAYMENTS_MODE: cannot be 'test' when ENV is 'production'")
 
             # 7. BOT_TOKEN check
-            if not self.BOT_TOKEN or self.BOT_TOKEN == "123456:TEST_BOT_TOKEN":
-                violations.append("BOT_TOKEN: cannot use placeholder bot token in production")
+            if (
+                not self.BOT_TOKEN
+                or self.BOT_TOKEN == "123456:TEST_BOT_TOKEN"
+                or "CHANGE_ME" in self.BOT_TOKEN
+                or self.BOT_TOKEN == ex.get("BOT_TOKEN")
+            ):
+                violations.append("BOT_TOKEN: cannot use placeholder/example bot token in production")
+
+            # 8. Live mode payment provider tokens
+            if self.PAYMENTS_MODE == "live":
+                if "CLICK" in self.ENABLED_PAYMENT_METHODS:
+                    if not self.CLICK_PROVIDER_TOKEN or ":TEST:" in self.CLICK_PROVIDER_TOKEN:
+                        violations.append("CLICK_PROVIDER_TOKEN: live mode requires a non-empty live provider token without :TEST:")
+                if "PAYME" in self.ENABLED_PAYMENT_METHODS:
+                    if not self.PAYME_PROVIDER_TOKEN or ":TEST:" in self.PAYME_PROVIDER_TOKEN:
+                        violations.append("PAYME_PROVIDER_TOKEN: live mode requires a non-empty live provider token without :TEST:")
 
         if violations:
             raise ValueError(
