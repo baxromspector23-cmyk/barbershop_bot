@@ -259,11 +259,11 @@ async def handle_pay_method_selected(
                 )
                 await session.commit()
                 await call.message.edit_text(
-                    f"✅ [TEST MODE] To'lov muvaffaqiyatli qabul qilindi ({method}). Navbatingiz faollashtirildi!",
+                    t("client.test_mode_success", lang=lang, method=method),
                     reply_markup=get_my_queue_keyboard(order.id, lang=lang),
                 )
                 return
-            await call.answer(f"{method} provider token is not configured.", show_alert=True)
+            await call.answer(t("client.provider_token_not_configured", lang=lang, method=method), show_alert=True)
             return
 
         # Send Telegram invoice
@@ -290,7 +290,7 @@ async def handle_pay_method_selected(
             return
         checkout_url = payload.get("checkout_url", "")
         await call.message.edit_text(
-            f"Paynet orqali to'lov havolasi:\n{checkout_url}\n\nTo'lov qilganingizdan so'ng navbatingiz avtomatik faollashadi.",
+            t("client.paynet_checkout_prompt", lang=lang, url=checkout_url),
             reply_markup=get_my_queue_keyboard(order.id, lang=lang),
         )
 

@@ -118,7 +118,7 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
     buttons = []
     for b in barbers:
         active_str = "🟢" if b.is_active else "🔴"
-        paused_str = " (Dam olishda)" if b.is_paused else ""
+        paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
         buttons.append([
             InlineKeyboardButton(
@@ -159,34 +159,38 @@ async def render_barber_management_card(
     today_rev = await payment_repo.get_barber_revenue_in_range(barber.id, day_start, day_end)
     week_rev = await payment_repo.get_barber_revenue_in_range(barber.id, week_start, week_end)
 
-    status_str = "🟢 Faol" if barber.is_active else "🔴 Faol emas"
-    paused_str = " (Dam olishda)" if barber.is_paused else ""
+    status_str = t("owner.status_active", lang=lang) if barber.is_active else t("owner.status_inactive", lang=lang)
+    paused_str = t("owner.status_paused", lang=lang) if barber.is_paused else ""
     username_str = f"@{barber.user.username}" if barber.user and barber.user.username else "—"
     phone_str = barber.user.phone if barber.user and barber.user.phone else "—"
 
-    text = (
-        f"💈 <b>{barber.display_name}</b>\n"
-        f"Username: {username_str}\n"
-        f"Telefon: {phone_str}\n"
-        f"Holati: {status_str}{paused_str}\n"
-        f"Navbat: {q_len} ta mijoz (~{wait_min} daq)\n"
-        f"Bugungi tushum: {format_money(today_rev)}\n"
-        f"Haftalik tushum: {format_money(week_rev)}"
+    text = t(
+        "owner.barber_card",
+        lang=lang,
+        name=barber.display_name,
+        username=username_str,
+        phone=phone_str,
+        status=status_str,
+        paused=paused_str,
+        count=q_len,
+        wait=wait_min,
+        today_rev=format_money(today_rev),
+        week_rev=format_money(week_rev),
     )
 
-    toggle_btn_text = "🔴 O'chirish" if barber.is_active else "🟢 Faollashtirish"
+    toggle_btn_text = t("owner.btn_deactivate", lang=lang) if barber.is_active else t("owner.btn_activate", lang=lang)
     buttons = [
         [
             InlineKeyboardButton(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}"),
-            InlineKeyboardButton(text="✂️ Xizmatlari", callback_data=f"owner_barber_services:{barber.id}"),
+            InlineKeyboardButton(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}"),
         ],
     ]
     if barber.user and barber.user.role == UserRole.BARBER.value:
         buttons.append([
-            InlineKeyboardButton(text="👤 Adminlikni bekor qilish", callback_data=f"owner_revoke_admin:{barber.id}")
+            InlineKeyboardButton(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}")
         ])
     buttons.append([
-        InlineKeyboardButton(text="⬅️ Barberlar ro'yxati", callback_data="owner_back_to_barbers")
+        InlineKeyboardButton(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers")
     ])
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -256,15 +260,8 @@ async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, 
     await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
 
 
-WEEKDAY_NAMES_UZ = [
-    "Dushanba",
-    "Seshanba",
-    "Chorshanba",
-    "Payshanba",
-    "Juma",
-    "Shanba",
-    "Yakshanba",
-]
+def get_weekday_name(weekday: int, lang: str) -> str:
+    return t(f"common.weekday_{weekday}", lang=lang)
 
 
 async def render_barber_schedule_view(
@@ -274,13 +271,14 @@ async def render_barber_schedule_view(
     wh_list = await barber_repo.get_working_hours(barber.id)
     wh_map = {wh.weekday: wh for wh in wh_list}
 
-    lines = [f"🕒 <b>{barber.display_name}</b> ish vaqti jadvali:\n"]
+    lines = [t("owner.schedule_view_title", lang=lang, name=barber.display_name)]
     buttons = []
-    for day_idx, day_name in enumerate(WEEKDAY_NAMES_UZ):
+    for day_idx in range(7):
+        day_name = get_weekday_name(day_idx, lang=lang)
         wh = wh_map.get(day_idx)
         if wh and wh.is_day_off:
-            status_text = "Dam olish kuni"
-            btn_text = f"🔴 {day_name}: Dam olish"
+            status_text = t("owner.schedule_day_off", lang=lang)
+            btn_text = f"🔴 {day_name}: {t('owner.schedule_day_off_btn', lang=lang)}"
         elif wh:
             start_str = wh.start_time.strftime("%H:%M")
             end_str = wh.end_time.strftime("%H:%M")
@@ -289,7 +287,7 @@ async def render_barber_schedule_view(
         else:
             status_text = "09:00 - 20:00"
             btn_text = f"🟢 {day_name}: {status_text}"
-        lines.append(f"• <b>{day_name}</b>: {status_text}")
+        lines.append(t("owner.schedule_item", lang=lang, day=day_name, status=status_text))
         buttons.append([
             InlineKeyboardButton(
                 text=btn_text,
@@ -299,7 +297,7 @@ async def render_barber_schedule_view(
 
     buttons.append([
         InlineKeyboardButton(
-            text="⬅️ Barber ma'lumotlariga qaytish",
+            text=t("owner.btn_back_to_barber_info", lang=lang),
             callback_data=f"owner_manage_barber:{barber.id}",
         )
     ])
@@ -338,27 +336,29 @@ async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user:
     if not barber:
         return
 
-    day_name = WEEKDAY_NAMES_UZ[weekday]
+    day_name = get_weekday_name(weekday, lang=lang)
     if wh and wh.is_day_off:
-        status_desc = "Dam olish kuni"
+        status_desc = t("owner.schedule_day_off", lang=lang)
     elif wh:
         status_desc = f"{wh.start_time.strftime('%H:%M')} - {wh.end_time.strftime('%H:%M')}"
     else:
         status_desc = "09:00 - 20:00"
 
-    text = (
-        f"🕒 <b>{barber.display_name}</b> — <b>{day_name}</b>\n\n"
-        f"Joriy holat: <b>{status_desc}</b>\n\n"
-        f"O'zgartirish uchun kerakli tugmani bosing:"
+    text = t(
+        "owner.day_detail_title",
+        lang=lang,
+        name=barber.display_name,
+        day=day_name,
+        status=status_desc,
     )
-    toggle_text = "🟢 Ish kuni qilish" if (wh and wh.is_day_off) else "🔴 Dam olish kuni qilish"
+    toggle_text = t("owner.btn_make_workday", lang=lang) if (wh and wh.is_day_off) else t("owner.btn_make_dayoff", lang=lang)
     buttons = [
         [
             InlineKeyboardButton(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}"),
-            InlineKeyboardButton(text="✏️ Vaqtni o'zgartirish", callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}"),
+            InlineKeyboardButton(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}"),
         ],
         [
-            InlineKeyboardButton(text="⬅️ Jadvalga qaytish", callback_data=f"owner_barber_schedule:{barber_id}"),
+            InlineKeyboardButton(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}"),
         ],
     ]
     await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
@@ -397,8 +397,8 @@ async def handle_owner_set_hours_prompt(call: CallbackQuery, state: FSMContext, 
 
     await state.set_state(EditScheduleSG.waiting_for_hours)
     await state.update_data(target_barber_id=barber_id, target_weekday=weekday)
-    day_name = WEEKDAY_NAMES_UZ[weekday]
-    prompt = f"Iltimos, {day_name} uchun ish vaqtini quyidagi formatda kiriting:\nHH:MM-HH:MM (masalan: 09:00-20:00 yoki 10:00-19:00):"
+    day_name = get_weekday_name(weekday, lang=lang)
+    prompt = t("owner.prompt_enter_hours", lang=lang, day=day_name)
     await call.message.answer(prompt)
     await call.answer()
 
@@ -442,7 +442,8 @@ async def handle_submit_working_hours(
 
     barber = await barber_repo.get_by_id(barber_id)
     text_view, markup = await render_barber_schedule_view(session, barber, lang)
-    await message.answer(f"✅ Ish vaqti saqlandi!\n\n{text_view}", reply_markup=markup, parse_mode="HTML")
+    msg_text = t("owner.hours_saved", lang=lang, text_view=text_view)
+    await message.answer(msg_text, reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data == "owner_back_to_barbers")
@@ -536,7 +537,7 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
             callback_data="back_to_main_menu",
         )
     ])
-    prompt = "✂️ Qaysi barberning xizmatlarini ko'rmoqchisiz?"
+    prompt = t("owner.select_barber_services", lang=lang)
     if is_cb:
         await target_msg.edit_text(prompt, reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
     else:
@@ -571,8 +572,10 @@ async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSessio
             callback_data=f"owner_add_svc:{barber.id}",
         )
     ])
+    hint = t("owner.barber_services_hint", lang=lang)
+    header_text = t("owner.barber_services_header", lang=lang, name=barber.display_name, hint=hint)
     await call.message.edit_text(
-        f"💈 <b>{barber.display_name}</b> xizmatlari:\n(Faol/No-faol qilish uchun ustiga bosing)",
+        header_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
     )
@@ -606,7 +609,7 @@ async def render_report_view(
         rev_fmt = format_money(r.revenue)
         ranking_lines.append(f"{crown}{idx}. {r.display_name}: {rev_fmt} ({r.services_count} ta)")
 
-    ranking_text = "\n".join(ranking_lines) if ranking_lines else "Hech qanday xizmat ko'rsatilmadi."
+    ranking_text = "\n".join(ranking_lines) if ranking_lines else t("owner.report_no_services", lang=lang)
 
     text = t(
         "owner.reports_title",
@@ -681,7 +684,7 @@ async def handle_report_csv(call: CallbackQuery, session: AsyncSession, user: Us
 
     await call.message.answer_document(
         document=BufferedInputFile(file_bytes, filename=filename),
-        caption=f"📈 {title} hisoboti (CSV)",
+        caption=t("owner.report_csv_caption", lang=lang, title=title),
     )
     await call.answer()
 
