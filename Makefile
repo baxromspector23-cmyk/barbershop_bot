@@ -21,6 +21,7 @@ down:
 test:
 	python scripts/verify_review_tests.py
 	python -m pytest tests/ -v
+	python scripts/check_report.py
 
 test-all: test
 
