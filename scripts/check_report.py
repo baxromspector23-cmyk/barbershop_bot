@@ -78,6 +78,24 @@ def validate_dependencies(content: str, errors: list[str]) -> int:
     return checked_count
 
 
+def validate_python_version_sections(content: str, errors: list[str]) -> int:
+    sections = re.split(r"\n(?=#{1,4}\s+)", content)
+    checked = 0
+    for sec in sections:
+        header_match = re.match(r"^(#{1,4}\s+[^\n]+)", sec)
+        if not header_match:
+            continue
+        header = header_match.group(1)
+        if "Python 3.12" in header:
+            checked += 1
+            has_py312 = any(line.strip().startswith("Python 3.12") for line in sec.splitlines())
+            if not has_py312:
+                errors.append(
+                    f"Report section '{header.strip()}' claims Python 3.12, but does not contain a line starting with 'Python 3.12' in its quoted output."
+                )
+    return checked
+
+
 def validate_report() -> bool:
     if not REPORT_FILE.exists():
         print(f"FAIL: Report file not found at {REPORT_FILE}")
@@ -122,6 +140,9 @@ def validate_report() -> bool:
     # 4. Check quoted dependency versions
     checked_deps = validate_dependencies(content, errors)
 
+    # 5. Check Python 3.12 claims
+    py312_sections = validate_python_version_sections(content, errors)
+
     if errors:
         print("FAIL: docs/FIX_REPORT.md verification failed:")
         for err in errors:
@@ -133,6 +154,7 @@ def validate_report() -> bool:
         f"  - {len(cited_tests)} cited test names verified existing in tests/\n"
         f"  - {len(checked_paths)} cited file paths verified on disk\n"
         f"  - {checked_deps} quoted dependency version references verified against requirements.txt and requirements.lock\n"
+        f"  - {py312_sections} sections claiming Python 3.12 verified containing 'Python 3.12' outputs\n"
         f"  - Zero forbidden buzzwords detected."
     )
     return True

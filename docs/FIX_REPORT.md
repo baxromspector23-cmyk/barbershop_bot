@@ -1,26 +1,27 @@
-# Independent Review Remediation Report (Round 3): `barbershop_bot`
+# Independent Review Remediation Report (Round 4): `barbershop_bot`
 
 **Date**: 2026-10-12  
 **Project**: `barbershop_bot`  
-**Test Suite**: 127 collected tests (117 passed, 10 skipped on local SQLite runner; PG-only tests require external PostgreSQL daemon)  
+**Test Suite**: 132 collected tests (123 passed, 9 skipped on local runner; PG-only tests require external PostgreSQL daemon)  
 **SHA-256 Hashes of Read-Only Reviewer Test Files**:
 - `tests/test_review_round1.py`: `721a82f0bc8eb3dd2f9f9bd196761e7a585113ec81076c467eb9928dae2a09d6` (VERIFIED byte-for-byte)
 - `tests/test_review_round2.py`: `604e60f709f1963d7b98e740c7603d3d2736904a555ffd240bda23404f6815bd` (VERIFIED byte-for-byte)
 - `tests/test_review_round3.py`: `a25d3d47ac85895dc52750d9c63e1ed4b98f30f56b7798e771664d0ee3998b4f` (VERIFIED byte-for-byte)
+- `tests/test_review_round4.py`: `f7ae520511dc1034f22953446b9d34552e8f61155a39c448d74ab79d86b2f3d2` (VERIFIED byte-for-byte)
 
 ---
 
 ## 1. Executive Summary & Verification State
 
-This document details the complete remediation of all findings identified in the third independent review round (items P1 through P5).
+This document details the complete remediation of all findings identified in the fourth independent review round (items Q1 through Q5).
 
-All three reviewer test files are maintained byte-for-byte without any modifications to assertions, names, or structure. The automated script `scripts/verify_review_tests.py` verifies all three cryptographic digests.
+All four reviewer test files are maintained byte-for-byte without any modifications to assertions, names, or structure. The automated script `scripts/verify_review_tests.py` verifies all four cryptographic digests.
 
 ### 1.1 Ground Rules Compliance
-1. **Order of Work**: Completed strictly in sequence: `P1 -> P3 -> P2 -> P4 -> P5`, with dedicated git commits per item and reviewer suite execution after each change.
-2. **Never Weaken Review Tests**: `tests/test_review_round1.py`, `tests/test_review_round2.py`, and `tests/test_review_round3.py` are preserved with exact reference hashes.
+1. **Order of Work**: Executed strictly in sequence: `Q1 -> Q3 -> Q4 -> Q2 -> Q5`, with dedicated git commits per item.
+2. **Never Weaken Review Tests**: `tests/test_review_round1.py`, `tests/test_review_round2.py`, `tests/test_review_round3.py`, and `tests/test_review_round4.py` are preserved with exact reference hashes.
 3. **Zero Leaked Secrets**: No `.env` or `*.db` files exist in the repository or release archive.
-4. **Truthful Reporting**: Zero fabricated claims. Tests requiring external infrastructure (Docker or PostgreSQL) that are not running locally are explicitly marked **NOT RUN**.
+4. **Truthful Reporting**: Zero fabricated claims. Tests requiring external infrastructure (Docker daemon or PostgreSQL daemon) that are not running locally are explicitly marked **NOT RUN**.
 
 ---
 
@@ -28,11 +29,11 @@ All three reviewer test files are maintained byte-for-byte without any modificat
 
 | Item | Priority | Root Cause & Remediation Summary | Files Changed | Associated Tests |
 | :--- | :---: | :--- | :--- | :--- |
-| **P1** | Blocker | **Lock File & Code Agreement**: `app/config.py` imported `NoDecode`, while `requirements.txt` allowed `>=2.2.0` and `requirements.lock` pinned `2.3.4`. **Fix**: Raised lower bound in `requirements.txt` to `pydantic-settings>=2.7.1` and pinned `pydantic-settings==2.7.1` in `requirements.lock`. Added build-time verification `RUN python -I -c "import app.main"` to `Dockerfile`. Verified import in Python 3.12. | `requirements.txt`, `requirements.lock`, `Dockerfile` | `test_Z1_dependency_bounds_must_match_what_the_code_imports`, `test_Z1b_requirements_lock_must_install_and_import_in_a_fresh_virtualenv` |
-| **P3** | High | **Alembic Postgres Schema Parity**: `migrations/versions/001_initial_schema.py` created a unique constraint `barbers_user_id_key`, while the model and migration 003 declared a unique index `ix_barbers_user_id`. `alembic check` reported removed constraint `barbers_user_id_key`. **Fix**: Added migration `migrations/versions/004_drop_barbers_user_id_key.py` that cleanly drops the redundant unique constraint on PostgreSQL, ensuring 100% agreement with model metadata. | `migrations/versions/004_drop_barbers_user_id_key.py`, `tests/test_alembic_drift.py` | `test_Z3_alembic_check_must_be_clean_on_postgresql`, `test_alembic_upgrade_to_head_and_schema_drift_sqlite`, `test_alembic_upgrade_to_head_and_schema_drift_postgres` |
-| **P2** | High | **Critical Payment Failure Alerting**: In `PaymentService.handle_successful_payment`, database errors aborted the PostgreSQL transaction. The alerting logic then called `_get_owner_lang`, executing queries on the aborted transaction which raised and silenced the owner alert. **Fix**: Rollback `self.session.rollback()` is executed immediately upon failure before alerting. `_get_owner_lang` is wrapped with a safe fallback to `uz`. `_notify_owners_critical_payment_failure` never raises and includes charge ID, order ID, amount, and method. | `app/services/payment_service.py`, `tests/test_payment_hardening.py` | `test_Z2_owner_must_be_alerted_when_recording_a_payment_fails_with_an_aborted_transaction`, `test_critical_failure_notifies_owner`, `test_critical_failure_with_database_error_and_rollback` |
-| **P4** | Medium | **Hardcoded Strings & AST Auditor**: Remaining Uzbek strings in `app/handlers/owner.py` (barber cards, weekday names, working-hours prompts) bypassed the AST linter because they were f-strings (`JoinedStr`) or assigned to local variables. **Fix**: Strengthened `tests/test_no_hardcoded_strings.py` to trace assigned variables and inspect `JoinedStr` parts. Replaced all user-visible strings in `app/handlers/owner.py` and `app/handlers/client.py` with `t()`, and added translations across `app/i18n/uz.yaml`, `app/i18n/uz_cyrl.yaml`, and `app/i18n/ru.yaml`. | `app/handlers/owner.py`, `app/handlers/client.py`, `app/i18n/uz.yaml`, `app/i18n/uz_cyrl.yaml`, `app/i18n/ru.yaml`, `tests/test_no_hardcoded_strings.py` | `test_no_hardcoded_strings_in_handlers`, `test_catalogs_have_identical_keys_and_placeholders` |
-| **P5** | Medium | **Report Integrity & Dependency Bounds**: Extended `scripts/check_report.py` to parse cited package versions against `requirements.txt` and `requirements.lock`. Regenerated report with honest counts and raw evidence. | `scripts/check_report.py`, `docs/FIX_REPORT.md` | Verified via `python scripts/check_report.py` |
+| **Q1** | Blocker | **Dockerfile Build-time Import Check**: `Dockerfile` previously had `RUN python -I -c "import app.main"`. The `-I` flag omitted current directory from `sys.path`, preventing import from `WORKDIR /app`. **Fix**: Changed line to `RUN python -c "import app.main"`. Verified execution inside project directory. | `Dockerfile` | `test_Y1_the_dockerfile_build_time_import_check_must_actually_work_from_the_image_workdir` |
+| **Q3** | High | **Customer Alert on Payment Recording Failure**: If payment recording failed in `handle_successful_payment_msg`, customer was not informed and received generic error middleware text, causing double charges. **Fix**: Wrapped payment service call in `try...except`, sending a translated alert (`payments.customer_payment_record_failed`) instructing the customer not to pay again before re-raising. | `app/handlers/payments.py`, `app/i18n/uz.yaml`, `app/i18n/uz_cyrl.yaml`, `app/i18n/ru.yaml` | `test_Y3_customer_must_be_told_when_his_payment_could_not_be_recorded` |
+| **Q4** | High | **Complete Lockfile Pinning**: `requirements.lock` lacked explicit pins for indirect runtime packages (`aiofiles`, `certifi`, `pytz`, `six`, `tzlocal`, `tzdata`). Maintained `pydantic-settings>=2.7.1` and `pydantic-settings==2.7.1`. **Fix**: Pinned all 31 transitive runtime packages in `requirements.lock`. Tested fresh installation and import in a clean Python 3.12 environment. | `requirements.lock`, `requirements.txt` | `test_Y4_requirements_lock_must_pin_every_runtime_dependency`, `test_Z1b_requirements_lock_must_install_and_import_in_a_fresh_virtualenv` |
+| **Q2** | Medium | **Full Translations & AST Auditor**: `handle_owner_back_to_barbers` had hardcoded `(Dam olishda)` bypassing AST auditor via `AugAssign`. Russian catalog had `so'm` in 10 places. Telegram invoices were Uzbek-only. Barber phone stored `"Kiritilmagan"`. **Fix**: Strengthened `tests/test_no_hardcoded_strings.py` to audit `AugAssign` and tuples. Replaced hardcoded text with `t()`, replaced all `so'm` in `app/i18n/ru.yaml` with `сум`, localized invoice titles, stored `None` for missing phone and translated on display, documented intentional Uzbek fallbacks in `docs/KNOWN_LIMITATIONS.md`. | `app/handlers/owner.py`, `app/handlers/common.py`, `app/payments/telegram_provider.py`, `app/i18n/ru.yaml`, `docs/KNOWN_LIMITATIONS.md`, `tests/test_no_hardcoded_strings.py` | `test_Y2_owner_barber_list_screen_must_be_fully_translated`, `test_no_hardcoded_strings_in_handlers`, `test_catalogs_have_identical_keys_and_placeholders` |
+| **Q5** | Medium | **Truthful Report & Validator Enhancement**: Updated `scripts/check_report.py` to enforce that sections claiming Python 3.12 contain literal `Python 3.12` lines in quoted output. Regenerated report with authentic logs and git commit history. | `scripts/check_report.py`, `docs/FIX_REPORT.md` | Verified via `python scripts/check_report.py` |
 
 ---
 
@@ -73,39 +74,90 @@ All 12 tests pass cleanly:
 
 ### 3.3 Round 3 (`tests/test_review_round3.py`)
 - `test_Z1_dependency_bounds_must_match_what_the_code_imports` (PASSED)
-- `test_Z1b_requirements_lock_must_install_and_import_in_a_fresh_virtualenv` (SKIPPED via `SKIP_FRESH_VENV=1`; NOT RUN due to sandbox PyPI network isolation)
-- `test_Z2_owner_must_be_alerted_when_recording_a_payment_fails_with_an_aborted_transaction` (SKIPPED; requires real PostgreSQL transaction abort)
-- `test_Z3_alembic_check_must_be_clean_on_postgresql` (SKIPPED; requires real PostgreSQL connection)
+- `test_Z1b_requirements_lock_must_install_and_import_in_a_fresh_virtualenv` (PASSED: verified in clean temporary virtual environment)
+- `test_Z2_owner_must_be_alerted_when_recording_a_payment_fails_with_an_aborted_transaction` (SKIPPED on SQLite; requires real PostgreSQL transaction abort)
+- `test_Z3_alembic_check_must_be_clean_on_postgresql` (SKIPPED on SQLite; requires real PostgreSQL connection)
+
+### 3.4 Round 4 (`tests/test_review_round4.py`)
+All 5 tests pass cleanly:
+- `test_Y1_the_dockerfile_build_time_import_check_must_actually_work_from_the_image_workdir` (PASSED)
+- `test_Y2_owner_barber_list_screen_must_be_fully_translated[ru]` (PASSED)
+- `test_Y2_owner_barber_list_screen_must_be_fully_translated[uz_cyrl]` (PASSED)
+- `test_Y3_customer_must_be_told_when_his_payment_could_not_be_recorded` (PASSED)
+- `test_Y4_requirements_lock_must_pin_every_runtime_dependency` (PASSED)
 
 ---
 
 ## 4. Test Execution & Raw Output Evidence
 
 ### 4.1 Verification of Review Test Files
-```
+```text
 > python scripts/verify_review_tests.py
 OK: tests/test_review_round1.py verified (721a82f0...)
 OK: tests/test_review_round2.py verified (604e60f7...)
 OK: tests/test_review_round3.py verified (a25d3d47...)
+OK: tests/test_review_round4.py verified (f7ae5205...)
 All review test files verified byte-for-byte.
 ```
 
-### 4.2 Python 3.12 Import Verification
+### 4.2 Dockerfile Import Check (Exact Line)
+```text
+> python -c "import app.main"
 ```
-> python -I -c "import sys; sys.path.insert(0, '.'); import app.main; print('IMPORT_OK')"
+Command returned code 0 with zero errors.
+
+### 4.3 Python 3.12 Virtualenv & Dependency Verification
+```text
+> py -3.12 --version
+Python 3.12.10
+
+> .\venv312\Scripts\python.exe -c "import app.main; print('IMPORT_OK')"
 IMPORT_OK
+
+> .\venv312\Scripts\pip.exe freeze
+aiofiles==24.1.0
+aiogram==3.14.0
+aiohttp==3.9.5
+aiosignal==1.3.1
+aiosqlite==0.20.0
+alembic==1.13.1
+annotated-types==0.7.0
+APScheduler==3.10.4
+asyncpg==0.29.0
+attrs==23.2.0
+certifi==2024.7.4
+frozenlist==1.4.1
+greenlet==3.0.3
+idna==3.7
+magic-filter==1.0.12
+Mako==1.3.5
+MarkupSafe==2.1.5
+multidict==6.0.5
+pydantic==2.8.2
+pydantic-settings==2.7.1
+pydantic_core==2.20.1
+python-dotenv==1.0.1
+pytz==2024.1
+PyYAML==6.0.1
+redis==5.0.7
+six==1.16.0
+SQLAlchemy==2.0.31
+typing_extensions==4.12.2
+tzdata==2026.5
+tzlocal==5.2
+yarl==1.9.4
 ```
 
-### 4.3 Full Test Suite Execution on SQLite
-```
-> pytest tests/
+### 4.4 Full Test Suite Execution on SQLite Runner
+```text
+> python -m pytest tests/
 ============================= test session starts =============================
 platform win32 -- Python 3.10.11, pytest-9.1.1, pluggy-1.6.0
 rootdir: C:\Users\1\.gemini\antigravity\scratch\barbershop_bot
 configfile: pyproject.toml
 plugins: anyio-4.15.1, asyncio-1.4.0
 asyncio: mode=auto, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
-collected 127 items
+collected 132 items
 
 tests\test_alembic_drift.py .s                                           [  1%]
 tests\test_barber_management.py ...                                      [  3%]
@@ -113,49 +165,60 @@ tests\test_concurrency.py .                                              [  4%]
 tests\test_config_and_security.py ....                                   [  7%]
 tests\test_conftest_safety.py ..                                         [  9%]
 tests\test_due_work.py ...                                               [ 11%]
-tests\test_i18n.py ..                                                    [ 13%]
+tests\test_i18n.py ..                                                    [ 12%]
 tests\test_lateness.py ...                                               [ 15%]
-tests\test_no_hardcoded_strings.py .                                     [ 16%]
+tests\test_no_hardcoded_strings.py .                                     [ 15%]
 tests\test_owner_services_management.py ...                              [ 18%]
-tests\test_payment_hardening.py ...                                      [ 21%]
-tests\test_payments.py .....                                             [ 25%]
-tests\test_permissions.py ..                                             [ 26%]
-tests\test_queue.py .....                                                [ 30%]
-tests\test_repo_hygiene.py ..                                            [ 32%]
-tests\test_reports.py .                                                  [ 33%]
-tests\test_review_findings.py ........................................   [ 64%]
-tests\test_review_round1.py ............                                 [ 74%]
-tests\test_review_round2.py ssssss...................                    [ 93%]
-tests\test_review_round3.py .sss                                         [ 96%]
+tests\test_payment_hardening.py ...                                      [ 20%]
+tests\test_payments.py .....                                             [ 24%]
+tests\test_permissions.py ..                                             [ 25%]
+tests\test_queue.py .....                                                [ 29%]
+tests\test_repo_hygiene.py ..                                            [ 31%]
+tests\test_reports.py .                                                  [ 31%]
+tests\test_review_findings.py ........................................   [ 62%]
+tests\test_review_round1.py ............                                 [ 71%]
+tests\test_review_round2.py ssssss...................                    [ 90%]
+tests\test_review_round3.py ..ss                                         [ 93%]
+tests\test_review_round4.py .....                                        [ 96%]
 tests\test_serverless.py ..                                              [ 98%]
 tests\test_working_hours_ui.py ..                                        [100%]
 
-================= 117 passed, 10 skipped in 62.62s (0:01:02) ==================
+================= 123 passed, 9 skipped in 141.23s (0:02:21) ==================
 ```
 
-### 4.4 Linter Audit
-```
+### 4.5 Ruff Linter Output
+```text
 > ruff check app tests
 All checks passed!
 ```
 
-### 4.5 Report Checker Audit
-```
+### 4.6 Report Validator Output
+```text
 > python scripts/check_report.py
 OK: docs/FIX_REPORT.md verified cleanly.
-  - 41 cited test names verified existing in tests/
-  - 21 cited file paths verified on disk
+  - 45 cited test names verified existing in tests/
+  - 23 cited file paths verified on disk
   - 2 quoted dependency version references verified against requirements.txt and requirements.lock
+  - 1 sections claiming Python 3.12 verified containing 'Python 3.12' outputs
   - Zero forbidden buzzwords detected.
+```
+
+### 4.7 Dedicated Git Commits (git log --oneline)
+```text
+> git log --oneline -n 6
+7b62603 fix(Q2): complete translations, strengthen AST linter for AugAssign/tuples, and document limitations
+36935d2 fix(Q4): pin all transitive runtime dependencies in requirements.lock
+747441f fix(Q3): notify customer with specific message when payment recording fails
+9f7b827 fix(Q1): remove -I flag from Dockerfile import check so app is importable from workdir
+6e50d3a fix: configure pythonpath in pyproject.toml pytest options
+eadfee5 fix(P5): update FIX_REPORT with round 3 evidence and enhance report validator
 ```
 
 ---
 
-## 5. NOT VERIFIED Disclosures
+## 5. NOT VERIFIED (Truthful Environmental Disclosures)
 
-In accordance with strict verification standards, the following aspects have **NOT BEEN VERIFIED** in this test environment:
-1. **Real PostgreSQL Execution**: Windows host environment lacks Docker engine and PostgreSQL daemon service. Concurrency and dialect tests requiring PostgreSQL (`test_Z2_owner_must_be_alerted_when_recording_a_payment_fails_with_an_aborted_transaction`, `test_Z3_alembic_check_must_be_clean_on_postgresql`, and the 6 round-2 concurrency tests) were NOT RUN locally and must be executed in a PostgreSQL 16 environment.
-2. **Fresh Virtualenv PyPI Download (`test_Z1b_requirements_lock_must_install_and_import_in_a_fresh_virtualenv`)**: Sandbox environment lacks outbound internet access to PyPI, so fresh venv package installation from `requirements.lock` was NOT RUN. Python 3.12 compatibility was validated via local installation.
-3. **Live Payment Gateway Transactions**: Real card charges through Click and Payme Telegram Payments were not processed with live merchant tokens.
-4. **Paynet Production Integration**: Paynet API integration remains disabled pending real provider endpoints.
-5. **Docker Build**: Docker daemon is unavailable on the local Windows machine; container build could not be tested directly.
+The following areas could not be verified in this local workspace:
+1. **Real PostgreSQL daemon concurrency row locks**: The local Windows machine has no PostgreSQL service active on port 5432 or 5433. The 9 PostgreSQL tests (`test_Z2_owner_must_be_alerted_when_recording_a_payment_fails_with_an_aborted_transaction`, `test_Z3_alembic_check_must_be_clean_on_postgresql`, `test_alembic_upgrade_to_head_and_schema_drift_postgres`, and the 6 round-2 concurrency tests) are marked **NOT RUN** locally and skipped by `pytest`.
+2. **Local Docker daemon build execution**: Docker Desktop is not running locally. The Dockerfile's import check was verified using Python runtime commands.
+3. **Live Telegram payment settlement & Paynet production endpoints**: Live cards were not charged; tests utilize mock pre-checkout queries and unit tests.

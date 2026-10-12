@@ -26,5 +26,6 @@ redis==5.0.7
 six==1.16.0
 SQLAlchemy==2.0.31
 typing_extensions==4.12.2
+tzdata==2026.5
 tzlocal==5.2
 yarl==1.9.4
