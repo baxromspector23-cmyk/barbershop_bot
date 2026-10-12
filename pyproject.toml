@@ -21,6 +21,7 @@ select = ["E", "F", "W", "I"]
 ignore = ["E501", "F401"]
 
 [tool.pytest.ini_options]
+pythonpath = ["."]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 filterwarnings = [
