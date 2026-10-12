@@ -20,6 +20,9 @@ RUN if [ -f requirements.lock ]; then pip install --no-cache-dir -r requirements
 # Copy application source
 COPY . .
 
+# Build-time import check ensuring all dependencies are present and importable
+RUN python -I -c "import app.main"
+
 # Ensure entrypoint is executable and set ownership
 RUN chmod +x docker-entrypoint.sh scripts/*.py \
     && chown -R appuser:appuser /app
