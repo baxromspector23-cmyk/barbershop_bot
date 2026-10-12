@@ -151,9 +151,18 @@ class PaymentService:
                         max_attempts,
                         exc,
                     )
-                    await self.session.rollback()
+                    try:
+                        await self.session.rollback()
+                    except Exception as rb_exc:
+                        logger.warning("Rollback failed during retryable concurrency conflict: %s", rb_exc)
                     await asyncio.sleep(0.05 * (2**attempt) + random.uniform(0.01, 0.05))
                     continue
+
+                try:
+                    await self.session.rollback()
+                except Exception as rb_exc:
+                    logger.warning("Rollback failed during critical payment failure: %s", rb_exc)
+
                 logger.critical(
                     "Payment recording failed: method=%s, provider_id=%s, order_id=%s, amount=%s: %s",
                     method,
@@ -162,13 +171,16 @@ class PaymentService:
                     amount,
                     exc,
                 )
-                await self._notify_owners_critical_payment_failure(
-                    order_id=order_id,
-                    method=method,
-                    charge_id=provider_payment_id,
-                    amount=amount,
-                    error_str=str(exc),
-                )
+                try:
+                    await self._notify_owners_critical_payment_failure(
+                        order_id=order_id,
+                        method=method,
+                        charge_id=provider_payment_id,
+                        amount=amount,
+                        error_str=str(exc),
+                    )
+                except Exception as notify_err:
+                    logger.critical("Failed to dispatch critical payment failure alert: %s", notify_err)
                 raise
 
         raise PaymentException(f"Failed to record payment for order #{order_id} after {max_attempts} attempts")
@@ -421,9 +433,12 @@ class PaymentService:
         return payment
 
     async def _get_owner_lang(self, owner_id: int) -> str:
-        owner_user = await self.user_repo.get_by_telegram_id(owner_id)
-        if owner_user and owner_user.language:
-            return owner_user.language
+        try:
+            owner_user = await self.user_repo.get_by_telegram_id(owner_id)
+            if owner_user and owner_user.language:
+                return owner_user.language
+        except Exception as exc:
+            logger.warning("Failed to fetch language for owner %s, fallback to 'uz': %s", owner_id, exc)
         return "uz"
 
     async def _notify_owner_duplicate_payment(self, order: Order, payment: Payment) -> None:
@@ -471,16 +486,19 @@ class PaymentService:
     async def _notify_owners_critical_payment_failure(
         self, order_id: int, method: str, charge_id: str, amount: int, error_str: str
     ) -> None:
-        amount_fmt = format_money(amount)
-        for owner_id in settings.OWNER_TELEGRAM_IDS:
-            lang = await self._get_owner_lang(owner_id)
-            text = t(
-                "payments.critical_failure_notify_owner",
-                lang,
-                order_id=order_id,
-                charge_id=charge_id,
-                amount=amount_fmt,
-                method=method,
-                error=error_str[:100],
-            )
-            await self.notifier.send_message(owner_id, text)
+        try:
+            amount_fmt = format_money(amount)
+            for owner_id in settings.OWNER_TELEGRAM_IDS:
+                lang = await self._get_owner_lang(owner_id)
+                text = t(
+                    "payments.critical_failure_notify_owner",
+                    lang,
+                    order_id=order_id,
+                    charge_id=charge_id,
+                    amount=amount_fmt,
+                    method=method,
+                    error=error_str[:100],
+                )
+                await self.notifier.send_message(owner_id, text)
+        except Exception as exc:
+            logger.critical("Unexpected error in _notify_owners_critical_payment_failure: %s", exc)
