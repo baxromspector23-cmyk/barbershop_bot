@@ -141,11 +141,12 @@ async def test_payment_amount_mismatch_rejected(
     await db_session.commit()
 
     ps = PaymentService(db_session, notifier=mock_notifier)
-    # Order price is 50000, sending 10000 should raise AmountMismatchError
-    with pytest.raises(AmountMismatchError):
-        await ps.handle_successful_payment(
-            method=PaymentMethod.CLICK.value,
-            provider_payment_id="mismatch_tx",
-            amount=10000,
-            order_id=order.id,
-        )
+    # Under N1: Never lose money. If amount mismatches, record payment as REFUND_PENDING with AMOUNT_MISMATCH
+    payment = await ps.handle_successful_payment(
+        method=PaymentMethod.CLICK.value,
+        provider_payment_id="mismatch_tx",
+        amount=10000,
+        order_id=order.id,
+    )
+    assert payment.status == PaymentStatus.REFUND_PENDING.value
+    assert payment.refund_reason == "AMOUNT_MISMATCH"
