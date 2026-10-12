@@ -10,6 +10,7 @@ from app.i18n import t
 from app.models.enums import OrderStatus, PaymentStatus
 from app.repositories.order_repo import OrderRepository
 from app.repositories.payment_repo import PaymentRepository
+from app.repositories.user_repo import UserRepository
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
 
@@ -90,15 +91,37 @@ async def handle_successful_payment_msg(message: Message, session: AsyncSession,
     # Convert from tiyin to UZS
     amount_uzs = payment_info.total_amount // 100
 
+    # Resolve customer language safely before payment service call
+    customer_lang = "uz"
+    try:
+        user_repo = UserRepository(session)
+        user = await user_repo.get_by_telegram_id(message.from_user.id)
+        if user and user.language:
+            customer_lang = user.language
+    except Exception:
+        pass
+
     payment_service = PaymentService(session, notifier=NotificationService(bot=bot))
-    await payment_service.handle_successful_payment(
-        method=method,
-        provider_payment_id=provider_tx_id,
-        amount=amount_uzs,
-        order_id=order_id,
-        raw_payload={
-            "telegram_payment_charge_id": payment_info.telegram_payment_charge_id,
-            "provider_payment_charge_id": payment_info.provider_payment_charge_id,
-        },
-    )
-    await session.commit()
+    try:
+        await payment_service.handle_successful_payment(
+            method=method,
+            provider_payment_id=provider_tx_id,
+            amount=amount_uzs,
+            order_id=order_id,
+            raw_payload={
+                "telegram_payment_charge_id": payment_info.telegram_payment_charge_id,
+                "provider_payment_charge_id": payment_info.provider_payment_charge_id,
+            },
+        )
+        await session.commit()
+    except Exception as exc:
+        logger.exception("Failed to record successful payment for order %s: %s", order_id, exc)
+        warn_msg = t("payments.customer_payment_record_failed", lang=customer_lang)
+        try:
+            await message.answer(warn_msg)
+        except Exception:
+            try:
+                await bot.send_message(chat_id=message.from_user.id, text=warn_msg)
+            except Exception:
+                pass
+        raise
