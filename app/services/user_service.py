@@ -130,14 +130,21 @@ class UserService:
         user.role = UserRole.BARBER.value
         user.phone = phone
 
-        # Create barber profile
-        barber = await self.barber_repo.create_barber(
-            user_id=user.id,
-            display_name=display_name,
-            photo_file_id=photo_file_id,
-        )
-        await self.barber_repo.create_service(barber.id, "Soch olish", 50000, 30)
-        await self.barber_repo.create_service(barber.id, "Soqol tekislash", 30000, 20)
+        # Create or update barber profile
+        barber = await self.barber_repo.get_by_user_id(user.id)
+        if barber:
+            barber.display_name = display_name
+            if photo_file_id:
+                barber.photo_file_id = photo_file_id
+            barber.is_active = True
+        else:
+            barber = await self.barber_repo.create_barber(
+                user_id=user.id,
+                display_name=display_name,
+                photo_file_id=photo_file_id,
+            )
+            await self.barber_repo.create_service(barber.id, "Soch olish", 50000, 30)
+            await self.barber_repo.create_service(barber.id, "Soqol tekislash", 30000, 20)
 
         await self.audit_repo.log(
             actor_user_id=user.id,

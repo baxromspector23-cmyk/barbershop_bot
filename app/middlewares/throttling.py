@@ -29,7 +29,13 @@ class ThrottlingMiddleware(BaseMiddleware):
         last_time = self.last_user_time.get(tg_user.id, 0.0)
 
         if now - last_time < self.rate_limit_seconds:
-            # Drop flood update silently
+            # Drop flood update, but answer callback query so Telegram spinner clears
+            callback_query = getattr(event, "callback_query", None) or (event if hasattr(event, "answer") else None)
+            if callback_query and hasattr(callback_query, "answer"):
+                try:
+                    await callback_query.answer()
+                except Exception:
+                    pass
             return
 
         self.last_user_time[tg_user.id] = now

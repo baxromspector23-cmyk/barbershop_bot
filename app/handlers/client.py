@@ -116,6 +116,7 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
     prompt = f"💈 {selected_barber.display_name}\n\n{t('client.choose_service', lang=lang)}"
     markup = get_services_keyboard(services, selected_barber.id, lang=lang)
     await call.message.edit_text(prompt, reply_markup=markup)
+    await call.answer()
 
 
 @router.callback_query(F.data == "back_to_barbers")
@@ -133,6 +134,7 @@ async def handle_back_to_barbers(call: CallbackQuery, session: AsyncSession, use
     prompt = t("client.choose_barber", lang=lang)
     markup = get_barbers_keyboard(barbers_with_metrics, lang=lang)
     await call.message.edit_text(prompt, reply_markup=markup)
+    await call.answer()
 
 
 @router.callback_query(F.data.startswith("choose_service:"))
@@ -170,6 +172,7 @@ async def handle_choose_service(call: CallbackQuery, session: AsyncSession, lang
     )
     markup = get_payment_timing_keyboard(barber_id, service_id, lang=lang)
     await call.message.edit_text(confirm_text, reply_markup=markup)
+    await call.answer()
 
 
 @router.callback_query(F.data.startswith("pay_timing:"))
@@ -222,6 +225,7 @@ async def handle_pay_timing(
         )
         markup = get_my_queue_keyboard(order.id, lang=lang)
         await call.message.edit_text(success_msg, reply_markup=markup)
+    await call.answer()
 
 
 @router.callback_query(F.data.startswith("pay_method:"))

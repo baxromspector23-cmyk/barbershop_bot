@@ -31,9 +31,25 @@ IGNORED_DIRS = {
 }
 
 
+def _git_ignored_files() -> set[str]:
+    """Untracked files matched by .gitignore. Empty outside a git checkout (e.g. unpacked zip) -> strict scan."""
+    import subprocess
+    try:
+        out = subprocess.run(
+            ["git", "ls-files", "--others", "--ignored", "--exclude-standard"],
+            cwd=PROJECT_ROOT, capture_output=True, text=True, timeout=30,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    if out.returncode != 0:
+        return set()
+    return {line.strip() for line in out.stdout.splitlines() if line.strip()}
+
+
 def test_repo_tree_hygiene():
     """Verify that no .env, *.db, *.sqlite*, or token secrets exist anywhere in repo."""
     violations: list[str] = []
+    git_ignored = _git_ignored_files()
 
     for root, dirs, files in os.walk(PROJECT_ROOT):
         # Exclude ignored dirs in-place
@@ -42,6 +58,9 @@ def test_repo_tree_hygiene():
         for file in files:
             file_path = Path(root) / file
             rel_path = file_path.relative_to(PROJECT_ROOT).as_posix()
+            if rel_path in git_ignored:
+                # local-only runtime files (.env, barbershop.db): never committed, never in the release zip
+                continue
 
             # 1. Check filename patterns
             for pat in FORBIDDEN_NAME_PATTERNS:
