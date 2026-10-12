@@ -13,7 +13,7 @@ class CashProvider(PaymentProvider):
     def method_name(self) -> str:
         return PaymentMethod.CASH.value
 
-    async def create_payment_payload(self, order: Order) -> dict[str, Any]:
+    async def create_payment_payload(self, order: Order, lang: str = "uz") -> dict[str, Any]:
         return {
             "method": self.method_name,
             "order_id": order.id,

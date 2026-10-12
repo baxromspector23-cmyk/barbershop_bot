@@ -3,6 +3,7 @@ common:
   select_lang: "Илтимос, тилни танланг:"
   share_phone: "📱 Телефон рақамни юбориш"
   skip: "Ўтказиб юбориш"
+  not_entered: "Киритилмаган"
   phone_saved: "Телефон рақамингиз сақланди."
   cancel_btn: "❌ Бекор қилиш"
   back_btn: "⬅️ Орқага"
@@ -208,6 +209,8 @@ onboarding:
   invalid_invite: "Таклиф ҳаволаси яроқсиз ёки муддати ўтган."
 
 payments:
+  invoice_title: "Barbershop: {service}"
+  invoice_description: "Буюртма #{ticket_no} ({service}) учун тўлов"
   err_malformed_payload: "Буюртма маълумотлари хато."
   err_order_not_found: "Буюртма топилмади."
   err_order_cancelled: "Ушбу буюртма бекор қилинган."

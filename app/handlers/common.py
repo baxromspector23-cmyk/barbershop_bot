@@ -183,7 +183,7 @@ async def handle_onboarding_phone(message: Message, state: FSMContext, lang: str
         phone = message.text.strip()
 
     if not phone or phone == t("common.skip", lang=lang):
-        phone = "Kiritilmagan"
+        phone = None
 
     await state.update_data(phone=phone)
     await state.set_state(BarberOnboardingSG.waiting_for_photo)

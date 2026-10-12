@@ -47,3 +47,10 @@ This document provides a factual, honest overview of current system boundaries, 
 - When an order with a paid online transaction is cancelled (by client, staff, 3rd lateness, or end-of-day expiry), the system records the payment as `REFUND_PENDING` with an audit reason.
 - Telegram Payments does not execute automated bank account clawbacks.
 - The owner is notified with the transaction details (order ID, amount, provider charge ID) and must disburse the refund via the Click/Payme merchant portal, then acknowledge it in the bot panel via "Qaytarildi" (`mark_refunded`).
+
+---
+
+## 7. Intentionally Uzbek-Only Elements
+- **Fallback Entity Names**: Fallback names `"Mijoz"` (for deleted or walk-in client records without a display nickname) and `"Barber"` (when a referenced barber profile is inaccessible or deleted) in `app/utils/formatting.py`, `app/models/order.py`, `app/handlers/barber.py`, and `app/handlers/owner.py` are intentionally preserved in Uzbek Latin as domain-standard terminology for the local business establishment.
+- **Administrative CSV Export Headers**: The CSV export header row in `app/services/report_service.py` (`"Sana,Barber,Mijoz,Xizmat,Summa,Usul,Holat"`) is intentionally maintained in Uzbek Latin to match local accounting/bookkeeping software imports (e.g. 1C / Excel templates in Uzbekistan).
+

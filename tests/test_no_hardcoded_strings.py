@@ -65,6 +65,11 @@ class _HandlerStringAuditor(ast.NodeVisitor):
             self.func_scopes[self.current_func].setdefault(node.target.id, []).append(node.value)
         self.generic_visit(node)
 
+    def visit_AugAssign(self, node: ast.AugAssign):
+        if self.current_func and isinstance(node.target, ast.Name):
+            self.func_scopes[self.current_func].setdefault(node.target.id, []).append(node.value)
+        self.generic_visit(node)
+
     def _extract_literals(self, node: ast.AST, func_name: str | None, depth: int = 0) -> list[str]:
         if depth > 6:
             return []
@@ -118,7 +123,7 @@ class _HandlerStringAuditor(ast.NodeVisitor):
                 for arg in node.args:
                     found.extend(self._extract_literals(arg, func_name, depth + 1))
 
-        elif isinstance(node, ast.List):
+        elif isinstance(node, (ast.List, ast.Tuple)):
             for elt in node.elts:
                 found.extend(self._extract_literals(elt, func_name, depth + 1))
 

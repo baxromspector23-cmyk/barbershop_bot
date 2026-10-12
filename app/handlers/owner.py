@@ -162,7 +162,7 @@ async def render_barber_management_card(
     status_str = t("owner.status_active", lang=lang) if barber.is_active else t("owner.status_inactive", lang=lang)
     paused_str = t("owner.status_paused", lang=lang) if barber.is_paused else ""
     username_str = f"@{barber.user.username}" if barber.user and barber.user.username else "—"
-    phone_str = barber.user.phone if barber.user and barber.user.phone else "—"
+    phone_str = barber.user.phone if (barber.user and barber.user.phone and barber.user.phone != "Kiritilmagan") else t("common.not_entered", lang=lang)
 
     text = t(
         "owner.barber_card",
@@ -457,7 +457,7 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
     buttons = []
     for b in barbers:
         active_str = "🟢" if b.is_active else "🔴"
-        paused_str = " (Dam olishda)" if b.is_paused else ""
+        paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
         buttons.append([
             InlineKeyboardButton(

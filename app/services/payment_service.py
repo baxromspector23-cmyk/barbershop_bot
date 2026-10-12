@@ -89,7 +89,8 @@ class PaymentService:
         if not provider:
             raise PaymentException(f"Payment method '{method}' is not supported")
 
-        payload = await provider.create_payment_payload(order)
+        client_lang = order.client.language if order.client and order.client.language else "uz"
+        payload = await provider.create_payment_payload(order, lang=client_lang)
         provider_payment_id = payload.get("provider_payment_id") or f"{method}_{order.id}"
 
         # Check existing payment

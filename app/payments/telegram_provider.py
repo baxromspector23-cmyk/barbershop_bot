@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.config import settings
+from app.i18n import t
 from app.models.enums import OrderStatus, PaymentMethod
 from app.models.order import Order
 from app.payments.base import PaymentProvider
@@ -23,17 +24,19 @@ class TelegramPaymentProvider(PaymentProvider):
             return settings.CLICK_PROVIDER_TOKEN or ""
         return ""
 
-    async def create_payment_payload(self, order: Order) -> dict[str, Any]:
+    async def create_payment_payload(self, order: Order, lang: str = "uz") -> dict[str, Any]:
         """
         Build Telegram invoice parameters.
         Currency: UZS.
         Telegram requires smallest currency units (tiyin: amount * 100).
         """
         amount_tiyin = order.price * 100
+        title = t("payments.invoice_title", lang=lang, service=order.service_name)
+        description = t("payments.invoice_description", lang=lang, ticket_no=order.ticket_no, service=order.service_name)
         return {
             "method": self.method_name,
-            "title": f"Barbershop: {order.service_name}",
-            "description": f"Buyurtma #{order.ticket_no} ({order.service_name}) uchun to'lov",
+            "title": title,
+            "description": description,
             "payload": f"order_{order.id}_{self.method_name}",
             "provider_token": self.get_provider_token(),
             "currency": "UZS",

@@ -13,7 +13,7 @@ class PaymentProvider(ABC):
         """Name of payment method (e.g. PAYME, CLICK, PAYNET, CASH, FAKE)."""
 
     @abstractmethod
-    async def create_payment_payload(self, order: Order) -> dict[str, Any]:
+    async def create_payment_payload(self, order: Order, lang: str = "uz") -> dict[str, Any]:
         """Generate invoice payload or payment URL for client."""
 
     @abstractmethod

@@ -3,6 +3,7 @@ common:
   select_lang: "Iltimos, tilni tanlang:"
   share_phone: "📱 Telefon raqamni yuborish"
   skip: "O'tkazib yuborish"
+  not_entered: "Kiritilmagan"
   phone_saved: "Telefon raqamingiz saqlandi."
   cancel_btn: "❌ Bekor qilish"
   back_btn: "⬅️ Orqaga"
@@ -208,6 +209,8 @@ onboarding:
   invalid_invite: "Taklif havolasi yaroqsiz yoki muddati o'tgan."
 
 payments:
+  invoice_title: "Barbershop: {service}"
+  invoice_description: "Buyurtma #{ticket_no} ({service}) uchun to'lov"
   err_malformed_payload: "Buyurtma ma'lumotlari xato."
   err_order_not_found: "Buyurtma topilmadi."
   err_order_cancelled: "Ushbu buyurtma bekor qilingan."

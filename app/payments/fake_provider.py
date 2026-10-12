@@ -19,7 +19,7 @@ class FakeProvider(PaymentProvider):
     def method_name(self) -> str:
         return "FAKE"
 
-    async def create_payment_payload(self, order: Order) -> dict[str, Any]:
+    async def create_payment_payload(self, order: Order, lang: str = "uz") -> dict[str, Any]:
         if settings.ENV == "production" or settings.PAYMENTS_MODE != "test":
             raise RuntimeError("FakeProvider is prohibited in production!")
 

@@ -28,7 +28,7 @@ class PaynetProvider(PaymentProvider):
     def method_name(self) -> str:
         return PaymentMethod.PAYNET.value
 
-    async def create_payment_payload(self, order: Order) -> dict[str, Any]:
+    async def create_payment_payload(self, order: Order, lang: str = "uz") -> dict[str, Any]:
         if not settings.PAYNET_ENABLED:
             return {
                 "method": self.method_name,
