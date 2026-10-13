@@ -128,10 +128,16 @@ class QueueService:
         current_time = current_tashkent.time()
         weekday = current_tashkent.weekday()
 
-        # Find today's working hours
+        # Find today's working hours. No row => open (hours are optional, set by the owner from the bot).
         wh = next((h for h in barber.working_hours if h.weekday == weekday), None)
-        if not wh or wh.is_day_off:
+        if not wh:
+            return True
+        if wh.is_day_off:
             return False
+
+        # start == end (e.g. 00:00 - 00:00) means open 24 hours
+        if wh.start_time == wh.end_time:
+            return True
 
         if current_time < wh.start_time or current_time >= wh.end_time:
             return False

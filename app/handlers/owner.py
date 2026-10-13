@@ -280,12 +280,10 @@ async def render_barber_schedule_view(
             status_text = t("owner.schedule_day_off", lang=lang)
             btn_text = f"🔴 {day_name}: {t('owner.schedule_day_off_btn', lang=lang)}"
         elif wh:
-            start_str = wh.start_time.strftime("%H:%M")
-            end_str = wh.end_time.strftime("%H:%M")
-            status_text = f"{start_str} - {end_str}"
+            status_text = _format_hours(wh)
             btn_text = f"🟢 {day_name}: {status_text}"
         else:
-            status_text = "09:00 - 20:00"
+            status_text = "00:00 - 24:00"
             btn_text = f"🟢 {day_name}: {status_text}"
         lines.append(t("owner.schedule_item", lang=lang, day=day_name, status=status_text))
         buttons.append([
@@ -302,6 +300,12 @@ async def render_barber_schedule_view(
         )
     ])
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def _format_hours(wh) -> str:
+    if wh.start_time == wh.end_time:
+        return "00:00 - 24:00"
+    return f"{wh.start_time.strftime('%H:%M')} - {wh.end_time.strftime('%H:%M')}"
 
 
 @router.callback_query(F.data.startswith("owner_barber_schedule:"))
@@ -340,9 +344,9 @@ async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user:
     if wh and wh.is_day_off:
         status_desc = t("owner.schedule_day_off", lang=lang)
     elif wh:
-        status_desc = f"{wh.start_time.strftime('%H:%M')} - {wh.end_time.strftime('%H:%M')}"
+        status_desc = _format_hours(wh)
     else:
-        status_desc = "09:00 - 20:00"
+        status_desc = "00:00 - 24:00"
 
     text = t(
         "owner.day_detail_title",
@@ -416,18 +420,29 @@ async def handle_submit_working_hours(
     barber_id = data.get("target_barber_id")
     weekday = data.get("target_weekday")
 
-    pattern = r"^([0-1]?[0-9]|2[0-3]):([0-5][0-9])-([0-1]?[0-9]|2[0-3]):([0-5][0-9])$"
-    match = re.match(pattern, text)
-    if not match:
-        await message.answer(t("owner.err_time_format", lang=lang))
-        return
+    if text.lower() in ["24", "24/7", "24 soat", "24ч"]:
+        start_t = time(0, 0)
+        end_t = time(0, 0)
+    else:
+        pattern = r"^([0-1]?[0-9]|2[0-3]):([0-5][0-9])\s*-\s*([0-1]?[0-9]|2[0-4]):([0-5][0-9])$"
+        match = re.match(pattern, text)
+        if not match:
+            await message.answer(t("owner.err_time_format", lang=lang))
+            return
 
-    h1, m1, h2, m2 = map(int, match.groups())
-    start_t = time(h1, m1)
-    end_t = time(h2, m2)
-    if start_t >= end_t:
-        await message.answer(t("owner.err_time_order", lang=lang))
-        return
+        h1, m1, h2, m2 = map(int, match.groups())
+        if (h1 == 0 and m1 == 0 and h2 == 24 and m2 == 0) or (h1 == 0 and m1 == 0 and h2 == 0 and m2 == 0):
+            start_t = time(0, 0)
+            end_t = time(0, 0)
+        else:
+            if h2 == 24:
+                h2 = 23
+                m2 = 59
+            start_t = time(h1, m1)
+            end_t = time(h2, m2)
+            if start_t >= end_t:
+                await message.answer(t("owner.err_time_order", lang=lang))
+                return
 
     barber_repo = BarberRepository(session)
     await barber_repo.update_working_hours(

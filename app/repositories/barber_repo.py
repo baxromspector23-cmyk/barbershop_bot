@@ -78,14 +78,14 @@ class BarberRepository:
         self.session.add(barber)
         await self.session.flush()
 
-        # Create default working hours (Mon-Sun, 9:00 - 20:00)
+        # Create default working hours (Mon-Sun, open 24h: start == end). Owner can set real hours from the bot.
         from datetime import time
         for weekday in range(7):
             wh = BarberWorkingHours(
                 barber_id=barber.id,
                 weekday=weekday,
-                start_time=time(9, 0),
-                end_time=time(20, 0),
+                start_time=time(0, 0),
+                end_time=time(0, 0),
                 is_day_off=False,
             )
             self.session.add(wh)
