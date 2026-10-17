@@ -188,3 +188,37 @@ class OrderRepository:
         )
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
+
+    async def get_client_visits(
+        self, client_id: int, limit: int = 10, offset: int = 0
+    ) -> list[Order]:
+        stmt = (
+            select(Order)
+            .where(
+                and_(
+                    Order.client_id == client_id,
+                    Order.status == OrderStatus.COMPLETED.value,
+                )
+            )
+            .options(selectinload(Order.barber), selectinload(Order.service))
+            .order_by(Order.completed_at.desc(), Order.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_client_visit_stats(self, client_id: int) -> tuple[int, int]:
+        stmt = select(
+            func.count(Order.id),
+            func.coalesce(func.sum(Order.price), 0),
+        ).where(
+            and_(
+                Order.client_id == client_id,
+                Order.status == OrderStatus.COMPLETED.value,
+            )
+        )
+        res = await self.session.execute(stmt)
+        row = res.one()
+        return int(row[0] or 0), int(row[1] or 0)
+

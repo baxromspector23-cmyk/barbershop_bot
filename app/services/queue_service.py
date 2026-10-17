@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +28,8 @@ from app.utils.time_utils import (
 
 logger = logging.getLogger(__name__)
 
+OVERRUN_ASSUMED_MINUTES = 5
+
 
 class QueueException(Exception):
     pass
@@ -35,6 +37,14 @@ class QueueException(Exception):
 
 class AlreadyInQueueError(QueueException):
     pass
+
+
+class QueueFullError(QueueException):
+    """Raised when a new client cannot be accepted today. `reason` is MAX_QUEUE or CLOSING_SOON."""
+
+    def __init__(self, reason: str, message: str = "Queue is full for today"):
+        super().__init__(message)
+        self.reason = reason
 
 
 class BarberClosedError(QueueException):
@@ -105,7 +115,9 @@ class QueueService:
             if o.status == OrderStatus.IN_SERVICE.value:
                 if o.started_at:
                     elapsed = max(0, int((current_time - o.started_at).total_seconds() / 60))
-                    total_wait += max(0, o.duration_minutes - elapsed)
+                    remaining = o.duration_minutes - elapsed
+                    # A service that runs over its planned time still blocks the chair: assume a few more minutes
+                    total_wait += remaining if remaining > 0 else OVERRUN_ASSUMED_MINUTES
                 else:
                     total_wait += o.duration_minutes
             else:
@@ -123,6 +135,9 @@ class QueueService:
         """Check if barber is active, not paused, and within working hours."""
         if not barber.is_active or barber.is_paused:
             return False
+
+        if not settings.CHECK_WORKING_HOURS:
+            return True
 
         current_tashkent = now_tashkent()
         current_time = current_tashkent.time()
@@ -157,6 +172,33 @@ class QueueService:
         est_wait = self.calculate_active_wait_time(ahead_orders)
         return position, people_ahead, est_wait
 
+    def minutes_until_close(self, barber: Barber) -> int | None:
+        """Minutes from now (Tashkent) until today's closing time; None when there is no closing time (24h / no hours)."""
+        if not settings.CHECK_WORKING_HOURS:
+            return None
+        current = now_tashkent()
+        weekday = current.weekday()
+        wh = next((h for h in barber.working_hours if h.weekday == weekday), None)
+        if not wh or wh.is_day_off or wh.start_time == wh.end_time:
+            return None
+        closing = datetime.combine(current.date(), wh.end_time)
+        return int((closing - current.replace(tzinfo=None)).total_seconds() // 60)
+
+    def capacity_block_reason(self, barber: Barber, active_orders: list[Order], duration_minutes: int) -> str | None:
+        """Why a NEW client must not be accepted right now (MAX_QUEUE / CLOSING_SOON), or None if he fits."""
+        if len(active_orders) >= settings.MAX_QUEUE_PER_BARBER:
+            return "MAX_QUEUE"
+        close_in = self.minutes_until_close(barber)
+        if close_in is not None:
+            if self.calculate_active_wait_time(active_orders) + duration_minutes > close_in:
+                return "CLOSING_SOON"
+        return None
+
+    @staticmethod
+    def estimated_start_text(wait_minutes: int) -> str:
+        """Clock time (Tashkent, HH:MM) at which a client with this wait should be served."""
+        return (now_tashkent() + timedelta(minutes=wait_minutes)).strftime("%H:%M")
+
     # ---------------------------------------------------------
     # Core State Machine Operations
     # ---------------------------------------------------------
@@ -168,6 +210,7 @@ class QueueService:
         walkin_name: str | None = None,
         walkin_phone: str | None = None,
         pay_now: bool = False,
+        enforce_capacity: bool = True,
     ) -> Order:
         """
         Join queue:
@@ -200,6 +243,11 @@ class QueueService:
             service = await self.barber_repo.get_service_by_id(service_id)
             if not service or service.barber_id != barber_id:
                 raise QueueException(f"Service #{service_id} not valid for barber #{barber_id}")
+
+            if enforce_capacity:
+                block = self.capacity_block_reason(barber, active_orders, service.duration_minutes)
+                if block:
+                    raise QueueFullError(block)
 
             next_pos_key = await self.order_repo.get_next_position_key(barber_id)
             today_date = tashkent_today()
@@ -298,6 +346,7 @@ class QueueService:
                 nick=nick,
                 service=order.service_name,
                 pos=pos,
+                order_id=order.id,
             )
 
         if not has_busy_order and pos == 1:
@@ -621,7 +670,8 @@ class QueueService:
     async def _flag_refund_if_prepaid(self, order: Order, reason: str = "CANCELLED") -> None:
         """If order had a PAID payment, mark it as REFUND_PENDING, notify owner and inform client."""
         payment = await self.payment_repo.get_by_order_id(order.id)
-        if payment and payment.status == PaymentStatus.PAID.value:
+        # RECEIPT_SENT: the client says he transferred money but staff has not verified it yet; the owner must check it too
+        if payment and payment.status in (PaymentStatus.PAID.value, PaymentStatus.RECEIPT_SENT.value):
             payment.status = PaymentStatus.REFUND_PENDING.value
             payment.refund_reason = reason
             await self.session.flush()

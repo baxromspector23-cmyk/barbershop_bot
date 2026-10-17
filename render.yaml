@@ -1,0 +1,42 @@
+# Render.com Blueprint (1-Click Free Web Service + Free PostgreSQL Deployment)
+# Docs: https://render.com/docs/blueprint-spec
+
+databases:
+  - name: barbershop-postgres
+    plan: free
+    databaseName: barbershop
+    user: barbershop
+
+services:
+  - type: web
+    name: barbershop-owner-site
+    runtime: docker
+    plan: free
+    healthCheckPath: /login
+    envVars:
+      - key: ENV
+        value: development
+      - key: RUN_MODE
+        value: polling
+      - key: HOST
+        value: 0.0.0.0
+      - key: SITE_ENABLED
+        value: "true"
+      - key: SITE_SECURE_COOKIES
+        value: "true"
+      - key: SITE_TRUST_PROXY
+        value: "true"
+      - key: SITE_USERNAME
+        value: Jasur_barber
+      - key: SITE_PASSWORD_HASH
+        value: scrypt$16384$8$1$add69903bcf32aaac84987a09ca77667$e217fd3a86e57bae3cdce5c778863bd700267979814fee2a443ee1fbd82485ac
+      - key: SITE_SESSION_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: barbershop-postgres
+          property: connectionString
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_TELEGRAM_IDS
+        sync: false

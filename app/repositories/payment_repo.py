@@ -193,6 +193,42 @@ class PaymentRepository:
         res = await self.session.execute(stmt)
         return list(res.scalars().all())
 
+    async def get_pending_receipts(self, barber_id: int | None = None) -> list[Payment]:
+        from app.models.enums import PaymentMethod
+        stmt = (
+            select(Payment)
+            .where(
+                Payment.method == PaymentMethod.TRANSFER.value,
+                Payment.status == PaymentStatus.RECEIPT_SENT.value,
+            )
+            .options(
+                selectinload(Payment.order),
+                selectinload(Payment.barber),
+                selectinload(Payment.client),
+            )
+            .order_by(Payment.id.asc())
+        )
+        if barber_id is not None:
+            stmt = stmt.where(Payment.barber_id == barber_id)
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def get_recent_transfer_payments(self, limit: int = 10) -> list[Payment]:
+        from app.models.enums import PaymentMethod
+        stmt = (
+            select(Payment)
+            .where(Payment.method == PaymentMethod.TRANSFER.value)
+            .options(
+                selectinload(Payment.order),
+                selectinload(Payment.barber),
+                selectinload(Payment.client),
+            )
+            .order_by(Payment.id.desc())
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
     async def mark_as_paid(
         self,
         payment: Payment,

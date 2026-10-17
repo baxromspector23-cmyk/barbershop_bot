@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     BigInteger,
@@ -107,3 +107,14 @@ class Order(Base):
                 return f"{self.walkin_name} ({self.walkin_phone})"
             return self.walkin_name
         return "Mijoz"
+
+    def display_name_for(self, viewer: Any = None) -> str:
+        """Client display name. Phone is ONLY shown if viewer is the owner (katta barber)."""
+        base = self.client_display_name
+        if viewer:
+            role = getattr(viewer, "role", None)
+            from app.models.enums import UserRole
+
+            if role == UserRole.OWNER.value and self.client and self.client.phone:
+                return f"{base} ({self.client.phone})"
+        return base

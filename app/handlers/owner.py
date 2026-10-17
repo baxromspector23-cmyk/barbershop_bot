@@ -1,3 +1,4 @@
+import html
 import logging
 import re
 from datetime import time
@@ -8,15 +9,15 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.handlers.barber import AddServiceSG
 from app.i18n import t
-from app.keyboards.common import get_back_to_main_keyboard
+from app.keyboards.common import btn, get_back_to_main_keyboard, menu_label
 from app.keyboards.owner import (
     get_refund_action_keyboard,
     get_reports_keyboard,
@@ -26,6 +27,7 @@ from app.models.enums import UserRole
 from app.models.user import User
 from app.repositories.barber_repo import BarberRepository
 from app.repositories.payment_repo import PaymentRepository
+from app.repositories.user_repo import UserRepository
 from app.services.payment_service import PaymentService
 from app.services.queue_service import QueueService
 from app.services.report_service import ReportService
@@ -53,9 +55,9 @@ def is_owner(user: User) -> bool:
 # Live Overview of All Queues
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("owner.menu_all_queues", "uz"),
-    t("owner.menu_all_queues", "uz_cyrl"),
-    t("owner.menu_all_queues", "ru"),
+    menu_label("owner.menu_all_queues", "uz"),
+    menu_label("owner.menu_all_queues", "uz_cyrl"),
+    menu_label("owner.menu_all_queues", "ru"),
 ]))
 @router.callback_query(F.data == "o_menu:all_queues")
 async def handle_all_queues(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -67,6 +69,8 @@ async def handle_all_queues(event: Message | CallbackQuery, session: AsyncSessio
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     barber_repo = BarberRepository(session)
     qs = QueueService(session)
@@ -91,12 +95,133 @@ async def handle_all_queues(event: Message | CallbackQuery, session: AsyncSessio
 
 
 # -------------------------------------------------------------
+# Katta Barber Info: Clients with Phones & Payment Receipts
+# -------------------------------------------------------------
+@router.message(F.text.in_([
+    menu_label("owner.menu_info", "uz"),
+    menu_label("owner.menu_info", "uz_cyrl"),
+    menu_label("owner.menu_info", "ru"),
+]))
+@router.callback_query(F.data == "o_menu:info")
+async def handle_owner_info_menu(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        return
+
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+        target_msg = event.message
+    else:
+        target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
+
+    user_repo = UserRepository(session)
+    payment_repo = PaymentRepository(session)
+
+    total_clients = await user_repo.count_clients()
+    recent_clients = await user_repo.get_all_clients(limit=10)
+    pending_receipts = await payment_repo.get_pending_receipts()
+    recent_receipts = await payment_repo.get_recent_transfer_payments(limit=5)
+
+    client_lines = []
+    if recent_clients:
+        for idx, c in enumerate(recent_clients, 1):
+            phone = c.phone or t("common.not_entered", lang=lang)
+            client_lines.append(f"{idx}. 👤 <b>{html.escape(c.display_nick)}</b>: 📱 <code>{html.escape(phone)}</code>")
+    else:
+        client_lines.append(f"<i>{t('owner.info_no_clients', lang=lang)}</i>")
+
+    receipt_lines = []
+    if recent_receipts:
+        for p in recent_receipts:
+            ticket = f"#{p.order.ticket_no}" if p.order else f"ID:{p.id}"
+            nick = p.order.client_display_name if p.order else (p.client.display_nick if p.client else "Mijoz")
+            phone = p.client.phone if p.client and p.client.phone else ""
+            phone_str = f" ({html.escape(phone)})" if phone else ""
+            status_icon = "✅" if p.status == "PAID" else ("⏳" if p.status == "RECEIPT_SENT" else "❌")
+            status_key = f"payments.status_{p.status.lower()}"
+            status_name = t(status_key, lang=lang)
+            receipt_lines.append(
+                f"🧾 <b>{html.escape(ticket)}</b> — {html.escape(nick)}{phone_str}: {format_money(p.amount)} so'm [{status_icon} {status_name}]"
+            )
+    else:
+        receipt_lines.append(f"<i>{t('owner.info_no_receipts', lang=lang)}</i>")
+
+    text = t(
+        "owner.info_panel_text",
+        lang=lang,
+        total_clients=total_clients,
+        pending_count=len(pending_receipts),
+        clients_block="\n".join(client_lines),
+        receipts_block="\n".join(receipt_lines),
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                btn(text=t("owner.btn_pending_receipts_count", lang=lang, count=len(pending_receipts)), callback_data="b_menu:pending_receipts", icon="receipt"),
+            ],
+            [
+                btn(text=t("owner.btn_all_clients", lang=lang), callback_data="o_clients:1", icon="users"),
+            ],
+            [
+                btn(text=t("common.back_btn", lang=lang), callback_data="back_to_main_menu", icon="back"),
+            ],
+        ]
+    )
+    if isinstance(event, CallbackQuery) and target_msg:
+        try:
+            await target_msg.edit_text(text, reply_markup=kb, parse_mode="HTML")
+            return
+        except Exception:
+            pass
+    await target_msg.answer(text, reply_markup=kb, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("o_clients:"))
+async def handle_owner_clients_list(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    page = int(call.data.split(":")[1])
+    per_page = 10
+    offset = (page - 1) * per_page
+
+    user_repo = UserRepository(session)
+    total_clients = await user_repo.count_clients()
+    clients = await user_repo.get_all_clients(limit=per_page, offset=offset)
+
+    title_line = t("owner.clients_list_title", lang=lang, total=total_clients)
+    lines = [title_line]
+    for idx, c in enumerate(clients, offset + 1):
+        phone = c.phone or t("common.not_entered", lang=lang)
+        lines.append(f"{idx}. 👤 <b>{html.escape(c.display_nick)}</b>\n   📱 <code>{html.escape(phone)}</code> | ID: {c.telegram_id}")
+
+    nav_btns = []
+    if page > 1:
+        nav_btns.append(btn(text=t("owner.btn_prev_page", lang=lang), callback_data=f"o_clients:{page - 1}", icon="back"))
+    if offset + per_page < total_clients:
+        nav_btns.append(btn(text=t("owner.btn_next_page", lang=lang), callback_data=f"o_clients:{page + 1}", icon="next"))
+
+    rows = []
+    if nav_btns:
+        rows.append(nav_btns)
+    rows.append([
+        btn(text=t("common.back_btn", lang=lang), callback_data="o_menu:info", icon="back"),
+    ])
+
+    await call.message.edit_text("\n\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
+    await call.answer()
+
+
+# -------------------------------------------------------------
 # Barbers Management & Invite Generation
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("owner.menu_barbers", "uz"),
-    t("owner.menu_barbers", "uz_cyrl"),
-    t("owner.menu_barbers", "ru"),
+    menu_label("owner.menu_barbers", "uz"),
+    menu_label("owner.menu_barbers", "uz_cyrl"),
+    menu_label("owner.menu_barbers", "ru"),
 ]))
 @router.callback_query(F.data == "o_menu:barbers")
 async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -110,6 +235,8 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
     else:
         target_msg = event
         is_cb = False
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     barber_repo = BarberRepository(session)
     barbers = await barber_repo.get_all()
@@ -120,23 +247,27 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         active_str = "🟢" if b.is_active else "🔴"
         paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
+        icon_name = "green" if b.is_active else "red"
         buttons.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
+                icon=icon_name,
             )
         ])
 
     buttons.append([
-        InlineKeyboardButton(
+        btn(
             text=t("owner.btn_invite_barber", lang=lang),
             callback_data="create_barber_invite",
+            icon="plus",
         )
     ])
     buttons.append([
-        InlineKeyboardButton(
+        btn(
             text=t("common.btn_back_main", lang=lang),
             callback_data="back_to_main_menu",
+            icon="home",
         )
     ])
     if is_cb:
@@ -179,18 +310,19 @@ async def render_barber_management_card(
     )
 
     toggle_btn_text = t("owner.btn_deactivate", lang=lang) if barber.is_active else t("owner.btn_activate", lang=lang)
+    toggle_icon = "red" if barber.is_active else "green"
     buttons = [
         [
-            InlineKeyboardButton(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}"),
-            InlineKeyboardButton(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}"),
+            btn(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}", icon=toggle_icon),
+            btn(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}", icon="scissors"),
         ],
     ]
     if barber.user and barber.user.role == UserRole.BARBER.value:
         buttons.append([
-            InlineKeyboardButton(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}")
+            btn(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}", icon="user")
         ])
     buttons.append([
-        InlineKeyboardButton(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers")
+        btn(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers", icon="back")
     ])
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -271,12 +403,16 @@ async def render_barber_schedule_view(
     wh_list = await barber_repo.get_working_hours(barber.id)
     wh_map = {wh.weekday: wh for wh in wh_list}
 
-    lines = [t("owner.schedule_view_title", lang=lang, name=barber.display_name)]
+    lines = []
+    if not settings.CHECK_WORKING_HOURS:
+        lines.append(t("owner.hours_not_enforced_banner", lang=lang) + "\n")
+    lines.append(t("owner.schedule_view_title", lang=lang, name=html.escape(barber.display_name)))
     buttons = []
     for day_idx in range(7):
         day_name = get_weekday_name(day_idx, lang=lang)
         wh = wh_map.get(day_idx)
-        if wh and wh.is_day_off:
+        is_off = bool(wh and wh.is_day_off)
+        if is_off:
             status_text = t("owner.schedule_day_off", lang=lang)
             btn_text = f"🔴 {day_name}: {t('owner.schedule_day_off_btn', lang=lang)}"
         elif wh:
@@ -285,18 +421,21 @@ async def render_barber_schedule_view(
         else:
             status_text = "00:00 - 24:00"
             btn_text = f"🟢 {day_name}: {status_text}"
+        icon_name = "red" if is_off else "green"
         lines.append(t("owner.schedule_item", lang=lang, day=day_name, status=status_text))
         buttons.append([
-            InlineKeyboardButton(
+            btn(
                 text=btn_text,
                 callback_data=f"owner_edit_wh:{barber.id}:{day_idx}",
+                icon=icon_name,
             )
         ])
 
     buttons.append([
-        InlineKeyboardButton(
+        btn(
             text=t("owner.btn_back_to_barber_info", lang=lang),
             callback_data=f"owner_manage_barber:{barber.id}",
+            icon="back",
         )
     ])
     return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -348,21 +487,23 @@ async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user:
     else:
         status_desc = "00:00 - 24:00"
 
-    text = t(
+    banner = (t("owner.hours_not_enforced_banner", lang=lang) + "\n\n") if not settings.CHECK_WORKING_HOURS else ""
+    text = banner + t(
         "owner.day_detail_title",
         lang=lang,
-        name=barber.display_name,
+        name=html.escape(barber.display_name),
         day=day_name,
         status=status_desc,
     )
     toggle_text = t("owner.btn_make_workday", lang=lang) if (wh and wh.is_day_off) else t("owner.btn_make_dayoff", lang=lang)
+    toggle_icon = "green" if (wh and wh.is_day_off) else "red"
     buttons = [
         [
-            InlineKeyboardButton(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}"),
-            InlineKeyboardButton(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}"),
+            btn(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}", icon=toggle_icon),
+            btn(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}", icon="edit"),
         ],
         [
-            InlineKeyboardButton(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}"),
+            btn(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}", icon="back"),
         ],
     ]
     await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
@@ -474,17 +615,20 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
         active_str = "🟢" if b.is_active else "🔴"
         paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
+        icon_name = "green" if b.is_active else "red"
         buttons.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
+                icon=icon_name,
             )
         ])
 
     buttons.append([
-        InlineKeyboardButton(
+        btn(
             text=t("owner.btn_invite_barber", lang=lang),
             callback_data="create_barber_invite",
+            icon="plus",
         )
     ])
     await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
@@ -512,9 +656,9 @@ async def handle_create_barber_invite(call: CallbackQuery, session: AsyncSession
 # Services Management (Any Barber)
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("owner.menu_services", "uz"),
-    t("owner.menu_services", "uz_cyrl"),
-    t("owner.menu_services", "ru"),
+    menu_label("owner.menu_services", "uz"),
+    menu_label("owner.menu_services", "uz_cyrl"),
+    menu_label("owner.menu_services", "ru"),
 ]))
 @router.callback_query(F.data == "o_menu:services")
 async def handle_owner_services_menu(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -528,6 +672,8 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
     else:
         target_msg = event
         is_cb = False
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     barber_repo = BarberRepository(session)
     barbers = await barber_repo.get_all()
@@ -541,15 +687,17 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
     rows = []
     for b in barbers:
         rows.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"💈 {b.display_name}",
                 callback_data=f"owner_barber_services:{b.id}",
+                icon="barbershop",
             )
         ])
     rows.append([
-        InlineKeyboardButton(
+        btn(
             text=t("common.btn_back_main", lang=lang),
             callback_data="back_to_main_menu",
+            icon="home",
         )
     ])
     prompt = t("owner.select_barber_services", lang=lang)
@@ -575,16 +723,19 @@ async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSessio
     rows = []
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
+        icon_name = "green" if s.is_active else "red"
         rows.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
+                icon=icon_name,
             )
         ])
     rows.append([
-        InlineKeyboardButton(
+        btn(
             text=t("barber.service_add_btn", lang=lang),
             callback_data=f"owner_add_svc:{barber.id}",
+            icon="plus",
         )
     ])
     hint = t("owner.barber_services_hint", lang=lang)
@@ -643,9 +794,9 @@ async def render_report_view(
 
 
 @router.message(F.text.in_([
-    t("owner.menu_reports", "uz"),
-    t("owner.menu_reports", "uz_cyrl"),
-    t("owner.menu_reports", "ru"),
+    menu_label("owner.menu_reports", "uz"),
+    menu_label("owner.menu_reports", "uz_cyrl"),
+    menu_label("owner.menu_reports", "ru"),
 ]))
 @router.callback_query(F.data == "o_menu:reports")
 async def handle_reports_menu(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -659,6 +810,8 @@ async def handle_reports_menu(event: Message | CallbackQuery, session: AsyncSess
     else:
         target_msg = event
         is_cb = False
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     text, markup = await render_report_view(session, "today", 0, lang)
     if is_cb:
@@ -708,9 +861,9 @@ async def handle_report_csv(call: CallbackQuery, session: AsyncSession, user: Us
 # Refunds (Pending Manual Refunds)
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("owner.menu_refunds", "uz"),
-    t("owner.menu_refunds", "uz_cyrl"),
-    t("owner.menu_refunds", "ru"),
+    menu_label("owner.menu_refunds", "uz"),
+    menu_label("owner.menu_refunds", "uz_cyrl"),
+    menu_label("owner.menu_refunds", "ru"),
 ]))
 @router.callback_query(F.data == "o_menu:refunds")
 async def handle_refunds_menu(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -722,6 +875,8 @@ async def handle_refunds_menu(event: Message | CallbackQuery, session: AsyncSess
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     payment_repo = PaymentRepository(session)
     pending_refunds = await payment_repo.get_refund_pending_payments()
@@ -732,7 +887,7 @@ async def handle_refunds_menu(event: Message | CallbackQuery, session: AsyncSess
     await target_msg.answer(t("owner.refunds_title", lang=lang))
     for p in pending_refunds:
         barber_name = p.barber.display_name if p.barber else "Barber"
-        nick = p.order.client_display_name if p.order else "Mijoz"
+        nick = p.order.display_name_for(user) if p.order else (f"{p.client.display_nick} ({p.client.phone})" if p.client and p.client.phone else "Mijoz")
         text = t(
             "owner.refund_item",
             lang=lang,
@@ -765,9 +920,9 @@ async def handle_mark_refunded(call: CallbackQuery, session: AsyncSession, user:
 # Client Block / Unblock
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("owner.menu_block", "uz"),
-    t("owner.menu_block", "uz_cyrl"),
-    t("owner.menu_block", "ru"),
+    menu_label("owner.menu_block", "uz"),
+    menu_label("owner.menu_block", "uz_cyrl"),
+    menu_label("owner.menu_block", "ru"),
 ]))
 @router.callback_query(F.data == "o_menu:block")
 async def handle_block_menu(event: Message | CallbackQuery, state: FSMContext, user: User, lang: str):
@@ -779,6 +934,8 @@ async def handle_block_menu(event: Message | CallbackQuery, state: FSMContext, u
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     await state.set_state(BlockUserSG.waiting_for_query)
     await target_msg.answer(t("owner.block_prompt", lang=lang), reply_markup=get_back_to_main_keyboard(lang))

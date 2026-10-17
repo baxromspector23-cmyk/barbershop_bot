@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 
 from aiogram import Bot, F, Router
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, LabeledPrice, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,18 +16,29 @@ from app.keyboards.client import (
     get_my_queue_keyboard,
     get_payment_methods_keyboard,
     get_payment_timing_keyboard,
+    get_receipt_cancel_keyboard,
+    get_receipt_prompt_keyboard,
     get_services_keyboard,
 )
-from app.models.enums import OrderStatus, PaymentMethod
+from app.keyboards.common import menu_label
+from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus
 from app.models.user import User
 from app.repositories.barber_repo import BarberRepository
 from app.repositories.order_repo import OrderRepository
+from app.repositories.payment_repo import PaymentRepository
+from app.services.manual_payment_service import (
+    AlreadyPaidError,
+    DuplicateReceiptError,
+    ManualPaymentService,
+    OrderNotPayableError,
+)
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentService
 from app.services.queue_service import (
     AlreadyInQueueError,
     BarberClosedError,
     CannotCancelInServiceError,
+    QueueFullError,
     QueueService,
 )
 from app.utils.formatting import format_money
@@ -35,10 +48,19 @@ logger = logging.getLogger(__name__)
 router = Router(name="client_router")
 
 
+class ReceiptSG(StatesGroup):
+    waiting_photo = State()
+
+
+def _queue_full_text(reason: str, lang: str) -> str:
+    key = "client.queue_full_max" if reason == "MAX_QUEUE" else "client.queue_full_closing"
+    return t(key, lang=lang, max=settings.MAX_QUEUE_PER_BARBER)
+
+
 @router.message(F.text.in_([
-    t("client.menu_join", "uz"),
-    t("client.menu_join", "uz_cyrl"),
-    t("client.menu_join", "ru"),
+    menu_label("client.menu_join", "uz"),
+    menu_label("client.menu_join", "uz_cyrl"),
+    menu_label("client.menu_join", "ru"),
 ]))
 @router.callback_query(F.data == "c_menu:join")
 async def handle_join_queue_menu(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -47,6 +69,14 @@ async def handle_join_queue_menu(event: Message | CallbackQuery, session: AsyncS
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
+
+    if not user.phone:
+        from app.keyboards.common import get_client_phone_registration_keyboard
+        prompt_reg = t("client.phone_required_to_join", lang=lang)
+        await target_msg.answer(prompt_reg, reply_markup=get_client_phone_registration_keyboard(lang), parse_mode="HTML")
+        return
 
     order_repo = OrderRepository(session)
     active_order = await order_repo.get_active_order_for_client(user.id)
@@ -76,6 +106,11 @@ async def handle_join_queue_menu(event: Message | CallbackQuery, session: AsyncS
     await target_msg.answer(prompt, reply_markup=markup)
 
 
+@router.callback_query(F.data == "noop:closed")
+async def handle_noop_closed(call: CallbackQuery, lang: str):
+    await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
+
+
 @router.callback_query(F.data.startswith("choose_barber:"))
 async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang: str):
     target = call.data.split(":")[1]
@@ -88,7 +123,7 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
         candidates = []
         for b in active_barbers:
             q_len, wait_min = await qs.get_barber_queue_metrics(b.id)
-            if qs.is_barber_open(b, wait_min):
+            if qs.is_barber_open(b, wait_min) and q_len < settings.MAX_QUEUE_PER_BARBER:
                 candidates.append((b, wait_min))
 
         if not candidates:
@@ -157,6 +192,12 @@ async def handle_choose_service(call: CallbackQuery, session: AsyncSession, lang
         await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
         return
 
+    active_orders = await qs.order_repo.get_active_orders_for_barber(barber.id)
+    block = qs.capacity_block_reason(barber, active_orders, service.duration_minutes)
+    if block:
+        await call.answer(_queue_full_text(block, lang), show_alert=True)
+        return
+
     pos = q_len + 1
     ahead = q_len
 
@@ -169,7 +210,7 @@ async def handle_choose_service(call: CallbackQuery, session: AsyncSession, lang
         pos=pos,
         ahead=ahead,
         wait_min=wait_min,
-    )
+    ) + "\n" + t("client.eta_line", lang=lang, eta=QueueService.estimated_start_text(wait_min))
     markup = get_payment_timing_keyboard(barber_id, service_id, lang=lang)
     await call.message.edit_text(confirm_text, reply_markup=markup)
     await call.answer()
@@ -205,6 +246,9 @@ async def handle_pay_timing(
     except BarberClosedError:
         await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
         return
+    except QueueFullError as exc:
+        await call.answer(_queue_full_text(exc.reason, lang), show_alert=True)
+        return
 
     if pay_now:
         # Prompt payment methods
@@ -222,7 +266,7 @@ async def handle_pay_timing(
             barber=order.barber.display_name,
             pos=pos,
             wait_min=wait_min,
-        )
+        ) + "\n" + t("client.eta_line", lang=lang, eta=QueueService.estimated_start_text(wait_min))
         markup = get_my_queue_keyboard(order.id, lang=lang)
         await call.message.edit_text(success_msg, reply_markup=markup)
     await call.answer()
@@ -298,6 +342,43 @@ async def handle_pay_method_selected(
             reply_markup=get_my_queue_keyboard(order.id, lang=lang),
         )
 
+    elif method == PaymentMethod.CASH.value:
+        if "CASH" not in settings.ENABLED_PAYMENT_METHODS:
+            await call.answer(t("payments.transfer_err_not_payable", lang=lang), show_alert=True)
+            return
+        # Nothing is stored: the barber presses "Naqd to'landi" (b_cash) after the service
+        await call.message.edit_text(
+            t("payments.cash_instructions", lang=lang, amount=format_money(order.price)),
+            reply_markup=get_my_queue_keyboard(order.id, lang=lang),
+        )
+        await call.answer()
+
+    elif method == PaymentMethod.TRANSFER.value:
+        card_digits = "".join(ch for ch in (settings.PAYMENT_CARD_NUMBER or "") if ch.isdigit())
+        if "TRANSFER" not in settings.ENABLED_PAYMENT_METHODS or len(card_digits) != 16:
+            await call.answer(t("payments.transfer_not_configured", lang=lang), show_alert=True)
+            return
+        if order.status not in (
+            OrderStatus.WAITING.value, OrderStatus.CALLED.value, OrderStatus.IN_SERVICE.value, OrderStatus.COMPLETED.value
+        ):
+            await call.answer(t("payments.transfer_err_not_payable", lang=lang), show_alert=True)
+            return
+        if await PaymentRepository(session).get_paid_by_order_id(order.id):
+            await call.answer(t("payments.err_already_paid", lang=lang), show_alert=True)
+            return
+        card_fmt = " ".join(card_digits[i:i + 4] for i in range(0, 16, 4))
+        await call.message.edit_text(
+            t(
+                "payments.transfer_instructions",
+                lang=lang,
+                card=card_fmt,
+                holder=settings.PAYMENT_CARD_HOLDER,
+                amount=format_money(order.price),
+            ),
+            reply_markup=get_receipt_prompt_keyboard(order.id, lang=lang),
+        )
+        await call.answer()
+
     elif method == "FAKE":
         if settings.ENV == "production" or settings.PAYMENTS_MODE != "test":
             await call.answer(t("client.test_payments_disabled", lang=lang), show_alert=True)
@@ -315,6 +396,120 @@ async def handle_pay_method_selected(
             t("client.test_payment_success", lang=lang),
             reply_markup=get_my_queue_keyboard(order.id, lang=lang),
         )
+
+
+@router.callback_query(F.data.startswith("pay_open:"))
+async def handle_pay_open(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    order_id = int(call.data.split(":")[1])
+    order = await OrderRepository(session).get_by_id(order_id)
+    if not order or order.client_id != user.id:
+        await call.answer(t("payments.err_foreign_payer", lang=lang), show_alert=True)
+        return
+    if await PaymentRepository(session).get_paid_by_order_id(order.id):
+        await call.answer(t("payments.err_already_paid", lang=lang), show_alert=True)
+        return
+    await call.message.edit_text(
+        t("client.service_completed_pay_prompt", lang=lang, amount=order.price),
+        reply_markup=get_payment_methods_keyboard(order.id, lang=lang),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data.startswith("tr_send:"))
+async def handle_receipt_send_prompt(call: CallbackQuery, session: AsyncSession, user: User, state: FSMContext, lang: str):
+    order_id = int(call.data.split(":")[1])
+    order = await OrderRepository(session).get_by_id(order_id)
+    if not order or order.client_id != user.id:
+        await call.answer(t("payments.err_foreign_payer", lang=lang), show_alert=True)
+        return
+    await state.set_state(ReceiptSG.waiting_photo)
+    await state.update_data(receipt_order_id=order_id)
+    await call.message.answer(
+        t("payments.transfer_send_prompt", lang=lang),
+        reply_markup=get_receipt_cancel_keyboard(lang=lang),
+    )
+    await call.answer()
+
+
+@router.callback_query(F.data == "tr_cancel")
+async def handle_receipt_cancel(call: CallbackQuery, state: FSMContext):
+    await state.clear()
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.answer()
+
+
+@router.message(ReceiptSG.waiting_photo, F.photo)
+async def handle_receipt_photo(
+    message: Message, session: AsyncSession, user: User, bot: Bot, state: FSMContext, lang: str
+):
+    data = await state.get_data()
+    order_id = data.get("receipt_order_id")
+    photo = message.photo[-1]
+    service = ManualPaymentService(session, notifier=NotificationService(bot=bot))
+    try:
+        payment = await service.submit_receipt(order_id, user.id, photo.file_id, photo.file_unique_id)
+        await session.commit()
+    except DuplicateReceiptError:
+        await session.rollback()
+        await message.answer(t("payments.transfer_err_duplicate", lang=lang))
+        return
+    except AlreadyPaidError:
+        await session.rollback()
+        await state.clear()
+        await message.answer(t("payments.err_already_paid", lang=lang))
+        return
+    except OrderNotPayableError:
+        await session.rollback()
+        await state.clear()
+        await message.answer(t("payments.transfer_err_not_payable", lang=lang))
+        return
+
+    await state.clear()
+    await message.answer(
+        t("payments.transfer_receipt_received", lang=lang),
+        reply_markup=get_my_queue_keyboard(order_id, lang=lang),
+    )
+    await service.notify_receipt_submitted(payment.id)
+
+
+@router.message(ReceiptSG.waiting_photo)
+async def handle_receipt_not_a_photo(
+    message: Message, state: FSMContext, session: AsyncSession, user: User, lang: str
+):
+    text = (message.text or "").strip()
+    if text.startswith("/"):
+        await state.clear()
+        if text.startswith("/start"):
+            from aiogram.filters import CommandObject
+
+            from app.handlers.common import handle_start
+            cmd = CommandObject(prefix="/", command="start", args="")
+            await handle_start(message, cmd, session, user, lang, state)
+            return
+        elif text.startswith("/menu"):
+            from app.handlers.common import handle_menu_command
+            await handle_menu_command(message, session, user)
+            return
+
+    client_buttons = [
+        menu_label("client.menu_join", "uz"), menu_label("client.menu_join", "uz_cyrl"), menu_label("client.menu_join", "ru"),
+        menu_label("client.menu_my_queue", "uz"), menu_label("client.menu_my_queue", "uz_cyrl"), menu_label("client.menu_my_queue", "ru"),
+        menu_label("client.menu_history", "uz"), menu_label("client.menu_history", "uz_cyrl"), menu_label("client.menu_history", "ru"),
+        menu_label("client.menu_lang", "uz"), menu_label("client.menu_lang", "uz_cyrl"), menu_label("client.menu_lang", "ru"),
+        t("common.btn_back_main", "uz"), t("common.btn_back_main", "uz_cyrl"), t("common.btn_back_main", "ru"),
+    ]
+    if text in client_buttons:
+        await state.clear()
+        from app.handlers.common import remove_reply_markup, render_role_main_dashboard
+        await remove_reply_markup(message)
+        dash_text, dash_markup = await render_role_main_dashboard(session, user)
+        await message.answer(dash_text, reply_markup=dash_markup, parse_mode="HTML")
+        return
+
+    await message.answer(t("payments.transfer_need_photo", lang=lang), reply_markup=get_receipt_cancel_keyboard(lang=lang))
 
 
 # -------------------------------------------------------------
@@ -336,6 +531,8 @@ async def show_active_queue(message_or_call, session: AsyncSession, order, lang:
         ahead=ahead,
         wait_min=wait_min,
     )
+    if order.status in (OrderStatus.WAITING.value, OrderStatus.CALLED.value):
+        text += "\n" + t("client.eta_line", lang=lang, eta=QueueService.estimated_start_text(wait_min))
     markup = get_my_queue_keyboard(order.id, lang=lang)
 
     if isinstance(message_or_call, Message):
@@ -345,9 +542,9 @@ async def show_active_queue(message_or_call, session: AsyncSession, order, lang:
 
 
 @router.message(F.text.in_([
-    t("client.menu_my_queue", "uz"),
-    t("client.menu_my_queue", "uz_cyrl"),
-    t("client.menu_my_queue", "ru"),
+    menu_label("client.menu_my_queue", "uz"),
+    menu_label("client.menu_my_queue", "uz_cyrl"),
+    menu_label("client.menu_my_queue", "ru"),
 ]))
 @router.callback_query(F.data == "c_menu:my_queue")
 async def handle_my_queue_menu(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -357,6 +554,8 @@ async def handle_my_queue_menu(event: Message | CallbackQuery, session: AsyncSes
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     order_repo = OrderRepository(session)
     active = await order_repo.get_active_order_for_client(user.id)
@@ -421,9 +620,9 @@ async def handle_confirm_cancel_queue(
 
 
 @router.message(F.text.in_([
-    t("client.menu_history", "uz"),
-    t("client.menu_history", "uz_cyrl"),
-    t("client.menu_history", "ru"),
+    menu_label("client.menu_history", "uz"),
+    menu_label("client.menu_history", "uz_cyrl"),
+    menu_label("client.menu_history", "ru"),
 ]))
 @router.callback_query(F.data == "c_menu:history")
 async def handle_client_history(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -435,6 +634,8 @@ async def handle_client_history(event: Message | CallbackQuery, session: AsyncSe
     else:
         target_msg = event
         is_cb = False
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     order_repo = OrderRepository(session)
     history = await order_repo.get_client_history(user.id, limit=10)

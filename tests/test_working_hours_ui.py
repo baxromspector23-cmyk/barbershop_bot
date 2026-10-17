@@ -3,6 +3,7 @@ from datetime import time, timedelta
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.barber import Barber
 from app.models.enums import UserRole
 from app.models.user import User
@@ -61,15 +62,91 @@ async def test_client_join_rejected_outside_working_hours(
     db_session: AsyncSession,
     sample_barber: Barber,
     sample_clients: list[User],
+    monkeypatch: pytest.MonkeyPatch,
 ):
-    """O3: Client join attempt outside working hours is rejected with BarberClosedError."""
+    """O3: Client join attempt outside working hours is rejected with BarberClosedError when check is enabled."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    import app.services.queue_service as qs_module
+    import app.utils.time_utils as tu_module
+
+    tz = ZoneInfo("Asia/Tashkent")
+    # Test at two different times of day: 01:30 (night) and 15:00 (afternoon)
+    for test_dt in [
+        datetime(2026, 10, 16, 1, 30, tzinfo=tz),
+        datetime(2026, 10, 16, 15, 0, tzinfo=tz),
+    ]:
+        monkeypatch.setattr(qs_module, "now_tashkent", lambda dt=test_dt: dt)
+        monkeypatch.setattr(tu_module, "now_tashkent", lambda dt=test_dt: dt)
+        monkeypatch.setattr(settings, "CHECK_WORKING_HOURS", True)
+        repo = BarberRepository(db_session)
+        qs = QueueService(db_session)
+
+        today_weekday = test_dt.weekday()
+
+        # Case A: Today is marked as day-off
+        await repo.update_working_hours(
+            barber_id=sample_barber.id,
+            weekday=today_weekday,
+            is_day_off=True,
+        )
+        await db_session.commit()
+
+        # Refresh barber with working hours
+        sample_barber = await repo.get_by_id(sample_barber.id)
+        assert qs.is_barber_open(sample_barber, 0) is False
+
+        with pytest.raises(BarberClosedError):
+            await qs.join_queue(
+                barber_id=sample_barber.id,
+                service_id=sample_barber.services[0].id,
+                client=sample_clients[0],
+                pay_now=False,
+            )
+
+        # Case B: Working hours set to a time window that excludes test_dt
+        # e.g. If test_dt is 01:30, window is 10:00 - 18:00
+        # If test_dt is 15:00, window is 08:00 - 12:00
+        wh_start = time(10, 0) if test_dt.hour < 10 else time(8, 0)
+        wh_end = time(18, 0) if test_dt.hour < 10 else time(12, 0)
+        await repo.update_working_hours(
+            barber_id=sample_barber.id,
+            weekday=today_weekday,
+            start_time=wh_start,
+            end_time=wh_end,
+            is_day_off=False,
+        )
+        await db_session.commit()
+
+        sample_barber = await repo.get_by_id(sample_barber.id)
+        assert qs.is_barber_open(sample_barber, 0) is False
+
+        with pytest.raises(BarberClosedError):
+            await qs.join_queue(
+                barber_id=sample_barber.id,
+                service_id=sample_barber.services[0].id,
+                client=sample_clients[0],
+                pay_now=False,
+            )
+
+
+@pytest.mark.asyncio
+async def test_barber_open_24_7_when_working_hours_check_disabled(
+    db_session: AsyncSession,
+    sample_barber: Barber,
+    sample_clients: list[User],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """When CHECK_WORKING_HOURS is False, barber is open 24/7 even if day-off is set in DB."""
+    monkeypatch.setattr(settings, "CHECK_WORKING_HOURS", False)
     repo = BarberRepository(db_session)
     qs = QueueService(db_session)
 
     now_t = now_tashkent()
     today_weekday = now_t.weekday()
 
-    # Case A: Today is marked as day-off
+    # Mark today as day-off in DB schedule
     await repo.update_working_hours(
         barber_id=sample_barber.id,
         weekday=today_weekday,
@@ -77,37 +154,16 @@ async def test_client_join_rejected_outside_working_hours(
     )
     await db_session.commit()
 
-    # Refresh barber with working hours
     sample_barber = await repo.get_by_id(sample_barber.id)
-    assert qs.is_barber_open(sample_barber, 0) is False
+    # Since CHECK_WORKING_HOURS is False, barber remains open 24/7
+    assert qs.is_barber_open(sample_barber, 0) is True
+    assert qs.minutes_until_close(sample_barber) is None
 
-    with pytest.raises(BarberClosedError):
-        await qs.join_queue(
-            barber_id=sample_barber.id,
-            service_id=sample_barber.services[0].id,
-            client=sample_clients[0],
-            pay_now=False,
-        )
-
-    # Case B: Working hours set to a time window that is already passed today
-    # e.g. 05:00 - 06:00 AM (assuming test does not run at 5 AM)
-    # Or start_time 1 minute in the future
-    await repo.update_working_hours(
+    order = await qs.join_queue(
         barber_id=sample_barber.id,
-        weekday=today_weekday,
-        start_time=time(1, 0),
-        end_time=time(2, 0),
-        is_day_off=False,
+        service_id=sample_barber.services[0].id,
+        client=sample_clients[0],
+        pay_now=False,
     )
-    await db_session.commit()
+    assert order is not None
 
-    sample_barber = await repo.get_by_id(sample_barber.id)
-    assert qs.is_barber_open(sample_barber, 0) is False
-
-    with pytest.raises(BarberClosedError):
-        await qs.join_queue(
-            barber_id=sample_barber.id,
-            service_id=sample_barber.services[0].id,
-            client=sample_clients[0],
-            pay_now=False,
-        )

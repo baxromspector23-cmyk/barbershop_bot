@@ -26,11 +26,14 @@ class PaymentMethod(str, enum.Enum):
     CLICK = "CLICK"
     PAYNET = "PAYNET"
     CASH = "CASH"
+    TRANSFER = "TRANSFER"
 
 
 class PaymentStatus(str, enum.Enum):
     PENDING = "PENDING"
     PAID = "PAID"
+    RECEIPT_SENT = "RECEIPT_SENT"
+    REJECTED = "REJECTED"
     FAILED = "FAILED"
     REFUND_PENDING = "REFUND_PENDING"
     REFUNDED = "REFUNDED"

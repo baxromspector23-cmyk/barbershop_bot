@@ -60,3 +60,7 @@ This document records all architectural choices, sensible defaults, and trade-of
   - The barber profile in `barbers` is marked `is_active = False`.
   - The user loses access to all staff commands and panel keyboards, safely retaining order history.
 
+## 9. Working Hours Enforcement Configuration (`CHECK_WORKING_HOURS`)
+- **Decision**: `CHECK_WORKING_HOURS` defaults to `False` in `config.py` and `.env.example`, allowing barbers to operate 24/7 without schedule restrictions by default as desired by the shop owner. When `CHECK_WORKING_HOURS=false`, barbers' shift schedules and day-off settings are not enforced against client queue entries. When the setting is disabled, the owner's schedule and day-off management screens display a warning banner indicating that working hours are not currently enforced.
+
+

@@ -15,6 +15,8 @@ EXPECTED_HASHES = {
     "tests/test_review_round2.py": "604e60f709f1963d7b98e740c7603d3d2736904a555ffd240bda23404f6815bd",
     "tests/test_review_round3.py": "a25d3d47ac85895dc52750d9c63e1ed4b98f30f56b7798e771664d0ee3998b4f",
     "tests/test_review_round4.py": "f7ae520511dc1034f22953446b9d34552e8f61155a39c448d74ab79d86b2f3d2",
+    "tests/test_review_round6.py": "9f049c99af9bc47a521b2af3351969603d27cfabb29bd2f4a74f9eecdd40b296",
+    "tests/test_review_round8.py": "e02e1e9ed51df62fc01d3e943f3d1dbf86d0a8077e00bf64b1a7c4900a3d93a3",
 }
 
 ROOT = Path(__file__).resolve().parent.parent

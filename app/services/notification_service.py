@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+from aiogram.exceptions import (
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+)
 
 from app.i18n import t
 
@@ -32,23 +37,86 @@ class NotificationService:
             })
             return True
 
-        try:
-            await self.bot.send_message(
-                chat_id=telegram_id,
-                text=text,
-                reply_markup=reply_markup,
-                parse_mode=parse_mode,
-            )
+        for attempt in range(2):
+            try:
+                await self.bot.send_message(
+                    chat_id=telegram_id,
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+                return True
+            except TelegramRetryAfter as e:
+                logger.warning(
+                    "TelegramRetryAfter sending to %s: retry in %ss (attempt %d/2)",
+                    telegram_id,
+                    e.retry_after,
+                    attempt + 1,
+                )
+                if attempt == 0:
+                    await asyncio.sleep(min(e.retry_after, 10))
+                    continue
+                return False
+            except TelegramForbiddenError:
+                logger.warning("User %s blocked the bot (TelegramForbiddenError)", telegram_id)
+                return False
+            except TelegramBadRequest as e:
+                logger.warning("TelegramBadRequest sending to %s: %s", telegram_id, e)
+                return False
+            except Exception as e:
+                logger.error("Error sending notification to %s: %s", telegram_id, e)
+                return False
+        return False
+
+    async def send_photo(
+        self,
+        telegram_id: int,
+        file_id: str,
+        caption: str,
+        reply_markup: Any = None,
+        parse_mode: str | None = None,
+    ) -> bool:
+        """Send a photo (by Telegram file_id). If bot is None (tests), record to sent_events."""
+        if not self.bot:
+            self.sent_events.append({
+                "telegram_id": telegram_id,
+                "text": caption,
+                "photo": file_id,
+                "reply_markup": reply_markup,
+            })
             return True
-        except TelegramForbiddenError:
-            logger.warning("User %s blocked the bot (TelegramForbiddenError)", telegram_id)
-            return False
-        except TelegramBadRequest as e:
-            logger.warning("TelegramBadRequest sending to %s: %s", telegram_id, e)
-            return False
-        except Exception as e:
-            logger.error("Error sending notification to %s: %s", telegram_id, e)
-            return False
+
+        for attempt in range(2):
+            try:
+                await self.bot.send_photo(
+                    chat_id=telegram_id,
+                    photo=file_id,
+                    caption=caption,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode,
+                )
+                return True
+            except TelegramRetryAfter as e:
+                logger.warning(
+                    "TelegramRetryAfter sending photo to %s: retry in %ss (attempt %d/2)",
+                    telegram_id,
+                    e.retry_after,
+                    attempt + 1,
+                )
+                if attempt == 0:
+                    await asyncio.sleep(min(e.retry_after, 10))
+                    continue
+                return False
+            except TelegramForbiddenError:
+                logger.warning("User %s blocked the bot (TelegramForbiddenError)", telegram_id)
+                return False
+            except TelegramBadRequest as e:
+                logger.warning("TelegramBadRequest sending photo to %s: %s", telegram_id, e)
+                return False
+            except Exception as e:
+                logger.error("Error sending photo to %s: %s", telegram_id, e)
+                return False
+        return False
 
     async def notify_client_called(
         self,
@@ -95,6 +163,7 @@ class NotificationService:
         nick: str,
         service: str,
         pos: int,
+        order_id: int | None = None,
     ) -> bool:
         text = t("barber.new_client_alert", lang=barber_lang, nick=nick, service=service, pos=pos)
         return await self.send_message(barber_tg_id, text)

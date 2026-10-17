@@ -21,3 +21,12 @@
         reverse_proxy app:8080
     }
 }
+
+{$SITE_DOMAIN:site.localhost} {
+    encode gzip zstd
+
+    handle {
+        reverse_proxy app:8081
+    }
+}
+

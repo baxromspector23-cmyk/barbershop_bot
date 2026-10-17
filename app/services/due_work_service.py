@@ -3,16 +3,19 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import settings
 from app.i18n import t
-from app.models.enums import OrderStatus
+from app.keyboards.common import btn
+from app.models.enums import OrderStatus, PaymentStatus
 from app.repositories.order_repo import OrderRepository
+from app.repositories.payment_repo import PaymentRepository
 from app.repositories.user_repo import UserRepository
 from app.services.notification_service import NotificationService
 from app.services.queue_service import QueueService
+from app.utils.formatting import format_money
 from app.utils.time_utils import now_utc, tashkent_today
 
 logger = logging.getLogger(__name__)
@@ -180,16 +183,136 @@ async def process_due_work(
             buttons = []
             for oid_item, ticket_no in unclosed_in_service_order_ids:
                 buttons.append([
-                    InlineKeyboardButton(
+                    btn(
                         text=t("owner.btn_finish_order", lang=lang, ticket_no=ticket_no),
                         callback_data=f"b_done:{oid_item}",
+                        icon="scissors",
                     ),
-                    InlineKeyboardButton(
+                    btn(
                         text=t("owner.btn_cancel_order", lang=lang, ticket_no=ticket_no),
                         callback_data=f"b_cancel:{oid_item}",
+                        icon="forbidden",
                     ),
                 ])
             markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
             await notifier.send_message(oid, report_text, reply_markup=markup)
+
+    # 5. Unconfirmed Receipt Reminders (after 5m, every 5m up to 3 times)
+    async with session_factory() as session:
+        payment_repo = PaymentRepository(session)
+        pending_receipts = await payment_repo.get_pending_receipts()
+        candidate_receipt_ids = []
+        for p in pending_receipts:
+            sent_at = p.receipt_sent_at or p.created_at
+            if not sent_at:
+                continue
+            raw = p.raw_payload or {}
+            reminder_count = raw.get("receipt_reminder_count", 0)
+            if reminder_count < 3:
+                threshold_min = 5 + (reminder_count * 5)
+                due_time = sent_at + timedelta(minutes=threshold_min)
+                if current_utc >= due_time:
+                    candidate_receipt_ids.append(p.id)
+
+    max_per_tick = getattr(settings, "RECEIPT_REMINDER_MAX_PER_TICK", 10)
+    candidate_receipt_ids = candidate_receipt_ids[:max_per_tick]
+
+    for payment_id in candidate_receipt_ids:
+        try:
+            notifications_to_send = []
+            async with session_factory() as item_session:
+                async with item_session.begin():
+                    payment_repo = PaymentRepository(item_session)
+                    payment = await payment_repo.get_by_id(payment_id)
+                    if not payment or payment.status != PaymentStatus.RECEIPT_SENT.value:
+                        continue
+                    raw = dict(payment.raw_payload or {})
+                    count = raw.get("receipt_reminder_count", 0)
+                    if count >= 3:
+                        continue
+                    raw["receipt_reminder_count"] = count + 1
+                    raw["receipt_last_reminded_at"] = current_utc.isoformat()
+                    payment.raw_payload = raw
+
+                    order = payment.order
+                    barber = payment.barber
+                    barber_user = barber.user if barber else None
+                    amount_str = format_money(payment.amount)
+                    ticket_no = order.ticket_no if order else "?"
+                    nick = order.client_display_name if order else "Mijoz"
+                    service_name = order.service_name if order else "?"
+
+                    if barber_user:
+                        lang = barber_user.language or "uz"
+                        reminder_text = t(
+                            "payments.transfer_reminder_barber",
+                            lang=lang,
+                            ticket_no=ticket_no,
+                            nick=nick,
+                            service=service_name,
+                            amount=amount_str,
+                        )
+                        kb = InlineKeyboardMarkup(inline_keyboard=[[
+                            btn(text=t("payments.btn_transfer_ok", lang=lang), callback_data=f"tr_ok:{payment.id}", style="success", icon="check"),
+                            btn(text=t("payments.btn_transfer_no", lang=lang), callback_data=f"tr_no:{payment.id}", style="danger", icon="cross"),
+                        ]])
+                        notifications_to_send.append({
+                            "type": "photo" if payment.receipt_file_id else "message",
+                            "chat_id": barber_user.telegram_id,
+                            "file_id": payment.receipt_file_id,
+                            "text": reminder_text,
+                            "kb": kb,
+                        })
+
+                    # Also alert owner on 2nd or 3rd reminder if owner is not this barber
+                    if count >= 1 and owner_ids:
+                        for oid in owner_ids:
+                            if barber_user and oid == barber_user.telegram_id:
+                                continue
+                            user_lang = "uz"
+                            owner_u = await UserRepository(item_session).get_by_telegram_id(oid)
+                            if owner_u and owner_u.language:
+                                user_lang = owner_u.language
+                            owner_text = t(
+                                "payments.transfer_reminder_barber",
+                                lang=user_lang,
+                                ticket_no=ticket_no,
+                                nick=nick,
+                                service=service_name,
+                                amount=amount_str,
+                            )
+                            kb_owner = InlineKeyboardMarkup(inline_keyboard=[[
+                                btn(text=t("payments.btn_transfer_ok", lang=user_lang), callback_data=f"tr_ok:{payment.id}", style="success", icon="check"),
+                                btn(text=t("payments.btn_transfer_no", lang=user_lang), callback_data=f"tr_no:{payment.id}", style="danger", icon="cross"),
+                            ]])
+                            notifications_to_send.append({
+                                "type": "photo" if payment.receipt_file_id else "message",
+                                "chat_id": oid,
+                                "file_id": payment.receipt_file_id,
+                                "text": owner_text,
+                                "kb": kb_owner,
+                            })
+
+            # Telegram sends happen AFTER database transaction commit
+            for n in notifications_to_send:
+                if n["type"] == "photo":
+                    await notifier.send_photo(
+                        telegram_id=n["chat_id"],
+                        file_id=n["file_id"],
+                        caption=n["text"],
+                        reply_markup=n["kb"],
+                        parse_mode="HTML",
+                    )
+                else:
+                    await notifier.send_message(
+                        telegram_id=n["chat_id"],
+                        text=n["text"],
+                        reply_markup=n["kb"],
+                        parse_mode="HTML",
+                    )
+            if notifications_to_send:
+                results["reminders_sent"] += 1
+        except Exception as e:
+            logger.error("Error processing receipt reminder for payment #%s: %s", payment_id, e)
 
     return results

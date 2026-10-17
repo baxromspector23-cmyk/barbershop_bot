@@ -115,3 +115,68 @@ class UserRepository:
         stmt = select(User).where(User.username == clean)
         res = await self.session.execute(stmt)
         return res.scalar_one_or_none()
+
+    async def get_all_clients(self, limit: int = 50, offset: int = 0) -> list[User]:
+        stmt = (
+            select(User)
+            .where(User.role == UserRole.CLIENT.value)
+            .order_by(User.created_at.desc(), User.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+
+    async def count_clients(self) -> int:
+        from sqlalchemy import func
+
+        stmt = select(func.count(User.id)).where(User.role == UserRole.CLIENT.value)
+        res = await self.session.execute(stmt)
+        return res.scalar_one() or 0
+
+    async def search_clients(self, query: str, limit: int = 10) -> list[User]:
+        import re
+
+        from sqlalchemy import func, or_
+
+        if not query or not isinstance(query, str):
+            return []
+        cleaned = query.replace("\x00", "")[:100].strip()
+        if cleaned.startswith("@"):
+            cleaned = cleaned[1:].strip()
+        if not cleaned or limit <= 0:
+            return []
+
+        digits = "".join(ch for ch in cleaned if ch.isdigit())
+        is_phone_query = bool(re.fullmatch(r"[\d\s+\-().]+", cleaned)) and len(digits) >= 3
+
+        if is_phone_query:
+            norm_phone = func.coalesce(User.phone, "")
+            for ch in (" ", "-", "+", "(", ")", "."):
+                norm_phone = func.replace(norm_phone, ch, "")
+            cond = norm_phone.contains(digits)
+        else:
+            if not any(ch.isalnum() for ch in cleaned):
+                return []
+            esc = (
+                cleaned.lower()
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_")
+            )
+            pattern = f"%{esc}%"
+            cond = or_(
+                func.lower(func.coalesce(User.first_name, "")).like(pattern, escape="\\"),
+                func.lower(func.coalesce(User.last_name, "")).like(pattern, escape="\\"),
+                func.lower(func.coalesce(User.username, "")).like(pattern, escape="\\"),
+            )
+
+        stmt = (
+            select(User)
+            .where(User.role == UserRole.CLIENT.value, cond)
+            .order_by(User.created_at.desc(), User.id.desc())
+            .limit(limit)
+        )
+        res = await self.session.execute(stmt)
+        return list(res.scalars().all())
+

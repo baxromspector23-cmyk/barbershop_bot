@@ -32,6 +32,7 @@ ALLOWLIST_TOP_FILES = [
     "Makefile",
     "pyproject.toml",
     "README.md",
+    "render.yaml",
     "requirements.txt",
     "requirements.lock",
 ]

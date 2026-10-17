@@ -7,7 +7,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     CallbackQuery,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
     ReplyKeyboardRemove,
@@ -18,7 +17,7 @@ from app.config import settings
 from app.i18n import t
 from app.keyboards.barber import get_barber_main_menu, get_barber_order_actions
 from app.keyboards.client import get_payment_methods_keyboard
-from app.keyboards.common import get_back_to_main_keyboard, get_role_main_menu
+from app.keyboards.common import btn, get_back_to_main_keyboard, get_role_main_menu, menu_label
 from app.models.enums import OrderStatus, PaymentMethod, PaymentStatus, UserRole
 from app.models.user import User
 from app.repositories.barber_repo import BarberRepository
@@ -29,6 +28,7 @@ from app.services.authorization import (
     assert_can_manage_order,
     assert_can_manage_service,
 )
+from app.services.manual_payment_service import REJECT_REASONS, ManualPaymentError, ManualPaymentService
 from app.services.notification_service import NotificationService
 from app.services.payment_service import PaymentException, PaymentService
 from app.services.queue_service import QueueService
@@ -59,9 +59,9 @@ def is_staff(user: User) -> bool:
 # Barber Live Queue View
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("barber.menu_queue", "uz"),
-    t("barber.menu_queue", "uz_cyrl"),
-    t("barber.menu_queue", "ru"),
+    menu_label("barber.menu_queue", "uz"),
+    menu_label("barber.menu_queue", "uz_cyrl"),
+    menu_label("barber.menu_queue", "ru"),
 ]))
 @router.callback_query(F.data == "b_menu:queue")
 async def handle_barber_queue(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -73,6 +73,8 @@ async def handle_barber_queue(event: Message | CallbackQuery, session: AsyncSess
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     barber_repo = BarberRepository(session)
     barber = await barber_repo.get_by_user_id(user.id)
@@ -94,7 +96,7 @@ async def handle_barber_queue(event: Message | CallbackQuery, session: AsyncSess
 
     # Display each active order with contextual action buttons
     for idx, o in enumerate(active_orders, 1):
-        nick = o.client_display_name
+        nick = o.display_name_for(user)
         time_str = format_time(o.started_at or o.called_at or o.created_at)
 
         if o.status == OrderStatus.IN_SERVICE.value:
@@ -160,6 +162,10 @@ async def handle_b_arrived(call: CallbackQuery, session: AsyncSession, user: Use
         assert_can_manage_order(user, order, barber=barber)
     except AuthorizationError:
         await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+
+    if order.status == OrderStatus.WAITING.value:
+        await call.answer(t("barber.client_not_called_yet", lang=lang), show_alert=True)
         return
 
     qs = QueueService(session, notifier=NotificationService(bot=bot))
@@ -347,6 +353,101 @@ async def handle_b_cash(call: CallbackQuery, session: AsyncSession, user: User, 
             pass
 
 
+async def _transfer_staff_context(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    """Returns (ok, barber). Answers the callback itself when the user may not review receipts."""
+    if not is_staff(user):
+        logger.warning("Non-staff user %s attempted a receipt review callback", getattr(user, "id", None))
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return False, None
+    barber = await BarberRepository(session).get_by_user_id(user.id)
+    if user.role != UserRole.OWNER.value and not barber:
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return False, None
+    return True, barber
+
+
+async def _clear_buttons(call: CallbackQuery) -> None:
+    try:
+        await call.message.edit_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+
+@router.callback_query(F.data.startswith("tr_ok:"))
+async def handle_transfer_confirm(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
+    ok, barber = await _transfer_staff_context(call, session, user, lang)
+    if not ok:
+        return
+    payment_id = int(call.data.split(":")[1])
+    service = ManualPaymentService(session, notifier=NotificationService(bot=bot))
+    try:
+        result = await service.confirm_transfer(payment_id, user, barber=barber)
+        await session.commit()
+    except AuthorizationError:
+        await session.rollback()
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+    except ManualPaymentError:
+        await session.rollback()
+        await call.answer(t("payments.tr_already_handled", lang=lang), show_alert=True)
+        await _clear_buttons(call)
+        return
+
+    await _clear_buttons(call)
+    if result.refund_flagged:
+        await call.answer(t("payments.tr_refund_flagged", lang=lang), show_alert=True)
+    elif not result.changed:
+        await call.answer(t("payments.tr_already_handled", lang=lang), show_alert=True)
+    else:
+        await call.answer(t("payments.tr_confirmed_ok", lang=lang, amount=format_money(result.payment.amount)), show_alert=True)
+        await service.notify_client_confirmed(result.payment)
+
+
+@router.callback_query(F.data.startswith("tr_no:"))
+async def handle_transfer_reject_prompt(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    ok, _ = await _transfer_staff_context(call, session, user, lang)
+    if not ok:
+        return
+    payment_id = int(call.data.split(":")[1])
+    rows = [
+        [btn(text=t(f"payments.btn_reason_{code.lower()}", lang=lang), callback_data=f"tr_why:{payment_id}:{code}")]
+        for code in REJECT_REASONS
+    ]
+    try:
+        await call.message.edit_reply_markup(reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+    except Exception:
+        pass
+    await call.answer(t("payments.tr_pick_reason", lang=lang))
+
+
+@router.callback_query(F.data.startswith("tr_why:"))
+async def handle_transfer_reject(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
+    ok, barber = await _transfer_staff_context(call, session, user, lang)
+    if not ok:
+        return
+    _, payment_id_str, reason = call.data.split(":")
+    service = ManualPaymentService(session, notifier=NotificationService(bot=bot))
+    try:
+        result = await service.reject_transfer(int(payment_id_str), user, reason, barber=barber)
+        await session.commit()
+    except AuthorizationError:
+        await session.rollback()
+        await call.answer(t("barber.unauthorized_order", lang=lang), show_alert=True)
+        return
+    except ManualPaymentError:
+        await session.rollback()
+        await call.answer(t("payments.tr_already_handled", lang=lang), show_alert=True)
+        await _clear_buttons(call)
+        return
+
+    await _clear_buttons(call)
+    if not result.changed:
+        await call.answer(t("payments.tr_already_handled", lang=lang), show_alert=True)
+        return
+    await call.answer(t("payments.tr_rejected_ok", lang=lang), show_alert=True)
+    await service.notify_client_rejected(result.payment, reason)
+
+
 @router.callback_query(F.data.startswith("b_cancel:"))
 async def handle_b_cancel(call: CallbackQuery, session: AsyncSession, user: User, bot: Bot, lang: str):
     if not is_staff(user):
@@ -419,13 +520,16 @@ async def handle_toggle_status_callback(
 
 
 @router.message(F.text.in_([
-    t("barber.menu_toggle_status", "uz"),
-    t("barber.menu_toggle_status", "uz_cyrl"),
-    t("barber.menu_toggle_status", "ru"),
+    menu_label("barber.menu_toggle_status", "uz"),
+    menu_label("barber.menu_toggle_status", "uz_cyrl"),
+    menu_label("barber.menu_toggle_status", "ru"),
 ]))
 async def handle_toggle_status(message: Message, session: AsyncSession, user: User, lang: str):
     if not is_staff(user):
         return
+
+    from app.handlers.common import remove_reply_markup
+    await remove_reply_markup(message)
 
     barber_repo = BarberRepository(session)
     barber = await barber_repo.get_by_user_id(user.id)
@@ -447,9 +551,9 @@ async def handle_toggle_status(message: Message, session: AsyncSession, user: Us
 # Barber Payments (Own payments only, NO totals, NO reports)
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("barber.menu_payments", "uz"),
-    t("barber.menu_payments", "uz_cyrl"),
-    t("barber.menu_payments", "ru"),
+    menu_label("barber.menu_payments", "uz"),
+    menu_label("barber.menu_payments", "uz_cyrl"),
+    menu_label("barber.menu_payments", "ru"),
 ]))
 @router.callback_query(F.data == "b_menu:payments")
 async def handle_barber_payments(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -461,6 +565,8 @@ async def handle_barber_payments(event: Message | CallbackQuery, session: AsyncS
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     barber_repo = BarberRepository(session)
     barber = await barber_repo.get_by_user_id(user.id)
@@ -493,13 +599,75 @@ async def handle_barber_payments(event: Message | CallbackQuery, session: AsyncS
     await target_msg.answer("".join(lines), reply_markup=get_back_to_main_keyboard(lang))
 
 
+@router.message(F.text.in_([
+    menu_label("barber.menu_pending_receipts", "uz"),
+    menu_label("barber.menu_pending_receipts", "uz_cyrl"),
+    menu_label("barber.menu_pending_receipts", "ru"),
+]))
+@router.callback_query(F.data == "b_menu:pending_receipts")
+async def handle_barber_pending_receipts(
+    event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str
+):
+    if not is_staff(user):
+        return
+
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+        target_msg = event.message
+    else:
+        target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
+
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_user_id(user.id)
+    barber_id = barber.id if barber else None
+
+    payment_repo = PaymentRepository(session)
+    pending_payments = await payment_repo.get_pending_receipts(
+        barber_id=barber_id if user.role != UserRole.OWNER.value else None
+    )
+
+    if not pending_payments:
+        await target_msg.answer(
+            t("barber.no_pending_receipts", lang=lang),
+            reply_markup=get_back_to_main_keyboard(lang),
+        )
+        return
+
+    title_text = t("barber.pending_receipts_title", lang=lang)
+    await target_msg.answer(title_text)
+
+    for p in pending_payments:
+        order = p.order
+        nick = order.display_name_for(user) if order else "Mijoz"
+        ticket_no = order.ticket_no if order else "?"
+        service_name = order.service_name if order else "?"
+        caption = t(
+            "payments.transfer_review_caption",
+            lang=lang,
+            nick=nick,
+            ticket_no=ticket_no,
+            service=service_name,
+            amount=format_money(p.amount),
+        )
+        kb = InlineKeyboardMarkup(inline_keyboard=[[
+            btn(text=t("payments.btn_transfer_ok", lang=lang), callback_data=f"tr_ok:{p.id}", style="success", icon="check"),
+            btn(text=t("payments.btn_transfer_no", lang=lang), callback_data=f"tr_no:{p.id}", style="danger", icon="cross"),
+        ]])
+        if p.receipt_file_id:
+            await target_msg.answer_photo(p.receipt_file_id, caption=caption, reply_markup=kb, parse_mode="HTML")
+        else:
+            await target_msg.answer(caption, reply_markup=kb, parse_mode="HTML")
+
+
 # -------------------------------------------------------------
 # Walk-in Client (Manual client addition without Telegram)
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("barber.menu_walkin", "uz"),
-    t("barber.menu_walkin", "uz_cyrl"),
-    t("barber.menu_walkin", "ru"),
+    menu_label("barber.menu_walkin", "uz"),
+    menu_label("barber.menu_walkin", "uz_cyrl"),
+    menu_label("barber.menu_walkin", "ru"),
 ]))
 @router.callback_query(F.data == "b_menu:walkin")
 async def handle_add_walkin(event: Message | CallbackQuery, session: AsyncSession, user: User, state: FSMContext, lang: str):
@@ -511,6 +679,8 @@ async def handle_add_walkin(event: Message | CallbackQuery, session: AsyncSessio
         target_msg = event.message
     else:
         target_msg = event
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     await state.set_state(WalkinSG.waiting_for_name)
     await target_msg.answer(t("barber.walkin_name_prompt", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
@@ -547,7 +717,7 @@ async def handle_walkin_phone(
     rows = []
     for s in services:
         rows.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"{s.name} — {format_money(s.price)}",
                 callback_data=f"walkin_svc:{s.id}",
             )
@@ -601,6 +771,7 @@ async def handle_walkin_service(
         walkin_name=walkin_name,
         walkin_phone=walkin_phone,
         pay_now=False,
+        enforce_capacity=False,  # the barber is physically present and decides who he takes
     )
     await session.commit()
     await state.clear()
@@ -622,9 +793,9 @@ async def handle_walkin_service(
 # Barber Services Management
 # -------------------------------------------------------------
 @router.message(F.text.in_([
-    t("barber.menu_services", "uz"),
-    t("barber.menu_services", "uz_cyrl"),
-    t("barber.menu_services", "ru"),
+    menu_label("barber.menu_services", "uz"),
+    menu_label("barber.menu_services", "uz_cyrl"),
+    menu_label("barber.menu_services", "ru"),
 ]))
 @router.callback_query(F.data == "b_menu:services")
 async def handle_barber_services(event: Message | CallbackQuery, session: AsyncSession, user: User, lang: str):
@@ -638,6 +809,8 @@ async def handle_barber_services(event: Message | CallbackQuery, session: AsyncS
     else:
         target_msg = event
         is_cb = False
+        from app.handlers.common import remove_reply_markup
+        await remove_reply_markup(target_msg)
 
     barber_repo = BarberRepository(session)
     barber = await barber_repo.get_by_user_id(user.id)
@@ -649,20 +822,22 @@ async def handle_barber_services(event: Message | CallbackQuery, session: AsyncS
     rows = []
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
+        icon_name = "green" if s.is_active else "red"
         rows.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
+                icon=icon_name,
             )
         ])
 
     if settings.ALLOW_BARBER_EDIT_OWN_SERVICES or user.role == UserRole.OWNER.value:
         rows.append([
-            InlineKeyboardButton(text=t("barber.service_add_btn", lang=lang), callback_data="add_svc_prompt")
+            btn(text=t("barber.service_add_btn", lang=lang), callback_data="add_svc_prompt", icon="plus")
         ])
 
     rows.append([
-        InlineKeyboardButton(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu")
+        btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", icon="home")
     ])
 
     title = t("barber.services_title", lang=lang)
@@ -711,18 +886,20 @@ async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user
     rows = []
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
+        icon_name = "green" if s.is_active else "red"
         rows.append([
-            InlineKeyboardButton(
+            btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
+                icon=icon_name,
             )
         ])
     if settings.ALLOW_BARBER_EDIT_OWN_SERVICES or user.role == UserRole.OWNER.value:
         rows.append([
-            InlineKeyboardButton(text=t("barber.service_add_btn", lang=lang), callback_data="add_svc_prompt")
+            btn(text=t("barber.service_add_btn", lang=lang), callback_data="add_svc_prompt", icon="plus")
         ])
     rows.append([
-        InlineKeyboardButton(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu")
+        btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", icon="home")
     ])
     if call.message and hasattr(call.message, "edit_reply_markup"):
         try:
@@ -871,7 +1048,7 @@ async def handle_add_svc_name(
         await barber_repo.update_service(edit_svc_id, name=name)
         await session.commit()
         await state.clear()
-        await message.answer(t("barber.service_name_updated", lang=lang), reply_markup=get_role_main_menu(user))
+        await message.answer(t("barber.service_name_updated", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
         return
 
     await state.update_data(svc_name=name)
@@ -907,7 +1084,7 @@ async def handle_add_svc_price(
         await barber_repo.update_service(edit_svc_id, price=price)
         await session.commit()
         await state.clear()
-        await message.answer(t("barber.service_price_updated", lang=lang), reply_markup=get_role_main_menu(user))
+        await message.answer(t("barber.service_price_updated", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
         return
 
     await state.update_data(svc_price=price)
@@ -943,7 +1120,7 @@ async def handle_add_svc_duration(
         await barber_repo.update_service(edit_svc_id, duration_minutes=duration)
         await session.commit()
         await state.clear()
-        await message.answer(t("barber.service_duration_updated", lang=lang), reply_markup=get_role_main_menu(user))
+        await message.answer(t("barber.service_duration_updated", lang=lang), reply_markup=get_back_to_main_keyboard(lang))
         return
 
     svc_name = data.get("svc_name", "Xizmat")
@@ -960,4 +1137,4 @@ async def handle_add_svc_duration(
         await session.commit()
     await state.clear()
 
-    await message.answer(t("barber.service_added", lang=lang), reply_markup=get_role_main_menu(user))
+    await message.answer(t("barber.service_added", lang=lang), reply_markup=get_back_to_main_keyboard(lang))

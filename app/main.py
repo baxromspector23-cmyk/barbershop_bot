@@ -6,6 +6,7 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.types import BotCommand, MenuButtonCommands
 from aiohttp import web
 
 from app.config import settings
@@ -57,9 +58,22 @@ def build_dispatcher() -> Dispatcher:
     return dp
 
 
+async def setup_bot_commands(bot: Bot) -> None:
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Botni ishga tushirish / Перезапустить"),
+            BotCommand(command="menu", description="Boshqaruv menyusi / Главное меню"),
+        ])
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        logger.info("Bot commands and menu button configured successfully")
+    except Exception as exc:
+        logger.warning("Failed to configure bot commands or menu button: %s", exc)
+
+
 async def main():
     settings.validate_runtime()
     bot = Bot(token=settings.BOT_TOKEN)
+    await setup_bot_commands(bot)
     dp = build_dispatcher()
 
     scheduler = None
@@ -67,6 +81,24 @@ async def main():
         scheduler = setup_internal_scheduler(bot, async_session_maker)
         scheduler.start()
         logger.info("Internal 15-second scheduler started")
+
+    site_runner = None
+    if settings.SITE_ENABLED:
+        from app.site.app import create_site_app
+
+        site_app = create_site_app(
+            async_session_maker,
+            username=settings.SITE_USERNAME,
+            password_hash=settings.SITE_PASSWORD_HASH,
+            secret=settings.SITE_SESSION_SECRET,
+            secure_cookies=settings.SITE_SECURE_COOKIES,
+            trust_proxy=settings.SITE_TRUST_PROXY,
+        )
+        site_runner = web.AppRunner(site_app)
+        await site_runner.setup()
+        owner_site = web.TCPSite(site_runner, host=settings.HOST, port=settings.SITE_PORT)
+        await owner_site.start()
+        logger.info("Owner-only website started on %s:%s", settings.HOST, settings.SITE_PORT)
 
     if settings.RUN_MODE == "webhook":
         logger.info("Starting bot in WEBHOOK mode on %s:%s", settings.HOST, settings.PORT)
@@ -82,6 +114,8 @@ async def main():
         finally:
             if scheduler:
                 scheduler.shutdown()
+            if site_runner:
+                await site_runner.cleanup()
             await runner.cleanup()
             await bot.session.close()
     else:
@@ -91,8 +125,11 @@ async def main():
         finally:
             if scheduler:
                 scheduler.shutdown()
+            if site_runner:
+                await site_runner.cleanup()
             await bot.session.close()
 
 
 if __name__ == "__main__":
     asyncio.run(main())
+

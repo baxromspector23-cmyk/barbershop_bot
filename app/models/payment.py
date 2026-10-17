@@ -42,6 +42,12 @@ class Payment(Base):
     provider_payment_id: Mapped[str] = mapped_column(String(255), nullable=False)
     refund_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
 
+    # Manual card-transfer flow: the client sends a photo of the bank receipt, staff confirms or rejects it
+    receipt_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    receipt_file_unique_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    receipt_sent_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    confirmed_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     paid_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         UtcDateTime,
@@ -59,6 +65,13 @@ class Payment(Base):
     __table_args__ = (
         UniqueConstraint("method", "provider_payment_id", name="uq_payment_method_provider_id"),
         Index("ix_payment_revenue", "status", "paid_at"),
+        Index(
+            "uq_payment_receipt_unique",
+            "receipt_file_unique_id",
+            unique=True,
+            postgresql_where=text("receipt_file_unique_id IS NOT NULL"),
+            sqlite_where=text("receipt_file_unique_id IS NOT NULL"),
+        ),
         Index(
             "uq_one_paid_per_order",
             "order_id",

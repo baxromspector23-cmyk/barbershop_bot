@@ -83,3 +83,17 @@ Quyidagilar faqat haqiqiy shartnoma va jonli to'lov ma'lumotlari bilan tekshiril
 2. BotFather jonli to'lov tokenlarining Telegram klasterlari bilan aloqasi.
 3. Paynet serverining TAS-IX orqali yuboradigan haqiqiy JSON-RPC so'rovlari.
 Botning barcha ichki to'lov holatlari, kvitansiya xabarlari, buxgalteriya hisobi, dublikat to'lovlarni bloklash va tushum hisob-kitoblari avtomatlashtirilgan testlar va simulyatsiya orqali tekshirilgan.
+
+---
+
+## Manual card transfer (TRANSFER) — the default payment flow
+
+1. The client joins the queue first (no payment needed to hold the place). From "Mening navbatim" or after the service he taps **To'lov qilish** and picks **Karta o'tkazma** (or **Naqd pul**).
+2. The bot shows the card from `PAYMENT_CARD_NUMBER` / `PAYMENT_CARD_HOLDER`, the amount, and asks for a **photo of the receipt**.
+3. The photo goes to the **serving barber** (the owner receives it only if the barber cannot be reached) with **Tasdiqlash / Rad etish** buttons. Rejecting asks for a reason (wrong amount / unreadable / money not received); the client can send a new receipt at once.
+4. Confirmed payment = `PAID`, linked to that barber, shown with the client's nickname; it counts as revenue once the order is COMPLETED.
+5. Safety rules: one receipt photo can back only one payment; confirming twice records the money once (barber row lock first); a receipt on a cancelled/expired order, or a transfer after cash was already taken, becomes `REFUND_PENDING` and the owner is alerted.
+
+Queue capacity: `MAX_QUEUE_PER_BARBER` caps the active queue; a client who cannot be served before closing time (wait + service > minutes to closing) is told to choose another barber or come tomorrow. Walk-ins added by the barber are not capped. Clients see an estimated start time (HH:MM).
+
+Configuration: `ENABLED_PAYMENT_METHODS=CASH,TRANSFER`; in production `PAYMENT_CARD_NUMBER` (16 digits) and `PAYMENT_CARD_HOLDER` are required when TRANSFER is enabled. Click/Payme code remains but is off unless enabled with real provider tokens.

@@ -181,3 +181,10 @@ async def sample_clients(db_session: AsyncSession) -> list[User]:
     stmt = select(User).where(User.telegram_id.in_([200000 + i for i in range(1, 6)])).order_by(User.id.asc())
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+@pytest.fixture(autouse=True)
+def default_test_settings(monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "CHECK_WORKING_HOURS", False)
+
