@@ -32,12 +32,12 @@ def setup_internal_scheduler(
         base_url = (settings.SITE_BASE_URL or "").rstrip("/")
         if not base_url or "localhost" in base_url or "127.0.0.1" in base_url:
             return
-        ping_url = f"{base_url}/healthz"
+        ping_url = f"{base_url}/login"
         try:
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session:
                 async with session.get(ping_url) as resp:
-                    logger.debug("Keep-alive ping to %s returned %s", ping_url, resp.status)
+                    logger.info("Keep-alive ping to %s returned %s", ping_url, resp.status)
         except Exception as e:
             logger.debug("Keep-alive ping warning: %s", e)
 

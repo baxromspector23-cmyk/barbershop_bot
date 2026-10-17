@@ -9,6 +9,6 @@ jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Render Health Endpoint
+      - name: Ping Render Public Endpoint
         run: |
-          curl -fsSL --retry 3 --max-time 15 https://barbershop-bot-site.onrender.com/healthz || true
+          curl -fsSL --retry 3 --max-time 15 https://barbershop-bot-site.onrender.com/login > /dev/null || true
