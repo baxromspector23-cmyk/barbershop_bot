@@ -10,7 +10,6 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
-    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
@@ -170,13 +169,13 @@ async def handle_owner_info_menu(event: Message | CallbackQuery, session: AsyncS
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                btn(text=t("owner.btn_pending_receipts_count", lang=lang, count=len(pending_receipts)), callback_data="b_menu:pending_receipts", icon="receipt"),
+                btn(text=t("owner.btn_pending_receipts_count", lang=lang, count=len(pending_receipts)), callback_data="b_menu:pending_receipts", style="primary", icon="receipt"),
             ],
             [
-                btn(text=t("owner.btn_all_clients", lang=lang), callback_data="o_clients:1", icon="users"),
+                btn(text=t("owner.btn_all_clients", lang=lang), callback_data="o_clients:1", style="success", icon="users"),
             ],
             [
-                btn(text=t("common.back_btn", lang=lang), callback_data="back_to_main_menu", icon="back"),
+                btn(text=t("common.back_btn", lang=lang), callback_data="back_to_main_menu", style="primary", icon="back"),
             ],
         ]
     )
@@ -211,15 +210,15 @@ async def handle_owner_clients_list(call: CallbackQuery, session: AsyncSession, 
 
     nav_btns = []
     if page > 1:
-        nav_btns.append(btn(text=t("owner.btn_prev_page", lang=lang), callback_data=f"o_clients:{page - 1}", icon="back"))
+        nav_btns.append(btn(text=t("owner.btn_prev_page", lang=lang), callback_data=f"o_clients:{page - 1}", style="primary", icon="back"))
     if offset + per_page < total_clients:
-        nav_btns.append(btn(text=t("owner.btn_next_page", lang=lang), callback_data=f"o_clients:{page + 1}", icon="next"))
+        nav_btns.append(btn(text=t("owner.btn_next_page", lang=lang), callback_data=f"o_clients:{page + 1}", style="primary", icon="next"))
 
     rows = []
     if nav_btns:
         rows.append(nav_btns)
     rows.append([
-        btn(text=t("common.back_btn", lang=lang), callback_data="o_menu:info", icon="back"),
+        btn(text=t("common.back_btn", lang=lang), callback_data="o_menu:info", style="primary", icon="back"),
     ])
 
     await call.message.edit_text("\n\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
@@ -259,10 +258,12 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
         icon_name = "green" if b.is_active else "red"
+        b_style = "success" if b.is_active else "danger"
         buttons.append([
             btn(
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
+                style=b_style,
                 icon=icon_name,
             )
         ])
@@ -271,6 +272,7 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         btn(
             text=t("owner.btn_invite_barber", lang=lang),
             callback_data="create_barber_invite",
+            style="success",
             icon="plus",
         )
     ])
@@ -278,6 +280,7 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         btn(
             text=t("common.btn_back_main", lang=lang),
             callback_data="back_to_main_menu",
+            style="primary",
             icon="home",
         )
     ])
@@ -322,18 +325,19 @@ async def render_barber_management_card(
 
     toggle_btn_text = t("owner.btn_deactivate", lang=lang) if barber.is_active else t("owner.btn_activate", lang=lang)
     toggle_icon = "red" if barber.is_active else "green"
+    toggle_style = "danger" if barber.is_active else "success"
     buttons = [
         [
-            btn(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}", icon=toggle_icon),
-            btn(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}", icon="scissors"),
+            btn(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}", style=toggle_style, icon=toggle_icon),
+            btn(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}", style="primary", icon="scissors"),
         ],
     ]
     if barber.user and barber.user.role == UserRole.BARBER.value:
         buttons.append([
-            btn(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}", icon="user")
+            btn(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}", style="danger", icon="user")
         ])
     buttons.append([
-        btn(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers", icon="back")
+        btn(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers", style="primary", icon="back")
     ])
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -433,11 +437,13 @@ async def render_barber_schedule_view(
             status_text = "00:00 - 24:00"
             btn_text = f"🟢 {day_name}: {status_text}"
         icon_name = "red" if is_off else "green"
+        b_style = "danger" if is_off else "success"
         lines.append(t("owner.schedule_item", lang=lang, day=day_name, status=status_text))
         buttons.append([
             btn(
                 text=btn_text,
                 callback_data=f"owner_edit_wh:{barber.id}:{day_idx}",
+                style=b_style,
                 icon=icon_name,
             )
         ])
@@ -446,6 +452,7 @@ async def render_barber_schedule_view(
         btn(
             text=t("owner.btn_back_to_barber_info", lang=lang),
             callback_data=f"owner_manage_barber:{barber.id}",
+            style="primary",
             icon="back",
         )
     ])
@@ -508,13 +515,14 @@ async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user:
     )
     toggle_text = t("owner.btn_make_workday", lang=lang) if (wh and wh.is_day_off) else t("owner.btn_make_dayoff", lang=lang)
     toggle_icon = "green" if (wh and wh.is_day_off) else "red"
+    toggle_style = "success" if (wh and wh.is_day_off) else "danger"
     buttons = [
         [
-            btn(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}", icon=toggle_icon),
-            btn(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}", icon="edit"),
+            btn(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}", style=toggle_style, icon=toggle_icon),
+            btn(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}", style="primary", icon="edit"),
         ],
         [
-            btn(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}", icon="back"),
+            btn(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}", style="primary", icon="back"),
         ],
     ]
     await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
@@ -627,10 +635,12 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
         paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
         icon_name = "green" if b.is_active else "red"
+        b_style = "success" if b.is_active else "danger"
         buttons.append([
             btn(
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
+                style=b_style,
                 icon=icon_name,
             )
         ])
@@ -639,6 +649,7 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
         btn(
             text=t("owner.btn_invite_barber", lang=lang),
             callback_data="create_barber_invite",
+            style="success",
             icon="plus",
         )
     ])
@@ -701,6 +712,7 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
             btn(
                 text=f"💈 {b.display_name}",
                 callback_data=f"owner_barber_services:{b.id}",
+                style="primary",
                 icon="barbershop",
             )
         ])
@@ -708,6 +720,7 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
         btn(
             text=t("common.btn_back_main", lang=lang),
             callback_data="back_to_main_menu",
+            style="primary",
             icon="home",
         )
     ])
@@ -735,10 +748,12 @@ async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSessio
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
         icon_name = "green" if s.is_active else "red"
+        s_style = "success" if s.is_active else "danger"
         rows.append([
             btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
+                style=s_style,
                 icon=icon_name,
             )
         ])
@@ -746,6 +761,7 @@ async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSessio
         btn(
             text=t("barber.service_add_btn", lang=lang),
             callback_data=f"owner_add_svc:{barber.id}",
+            style="success",
             icon="plus",
         )
     ])
@@ -993,23 +1009,29 @@ def get_admin_panel_content() -> tuple[str, InlineKeyboardMarkup]:
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🌐 Saytga o'tish (Login)", url=site_url)],
+            [btn(text="🌐 Saytga o'tish (Login)", url=site_url, style="primary", icon="lang")],
             [
-                InlineKeyboardButton(
+                btn(
                     text="🔄 Yangi parol generatsiya qilish",
                     callback_data="admin_site:gen_pwd",
+                    style="success",
+                    icon="refresh",
                 ),
             ],
             [
-                InlineKeyboardButton(
+                btn(
                     text="✏️ O'zim yangi parol yozaman",
                     callback_data="admin_site:set_pwd",
+                    style="primary",
+                    icon="edit",
                 ),
             ],
             [
-                InlineKeyboardButton(
+                btn(
                     text="❌ Yopish",
                     callback_data="admin_site:close",
+                    style="danger",
+                    icon="cross",
                 ),
             ],
         ]
@@ -1091,8 +1113,8 @@ async def handle_admin_generate_password(call: CallbackQuery, user: User):
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🌐 Saytni ochish", url=site_url)],
-            [InlineKeyboardButton(text="🔙 Boshqaruv paneliga qaytish", callback_data="admin_site:panel")],
+            [btn(text="🌐 Saytni ochish", url=site_url, style="success", icon="lang")],
+            [btn(text="⬅️ Boshqaruv paneliga qaytish", callback_data="admin_site:panel", style="primary", icon="back")],
         ]
     )
     try:
@@ -1116,7 +1138,7 @@ async def handle_admin_set_password_prompt(call: CallbackQuery, state: FSMContex
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="admin_site:cancel")],
+            [btn(text="❌ Bekor qilish", callback_data="admin_site:cancel", style="danger", icon="cross")],
         ]
     )
     try:
@@ -1141,7 +1163,7 @@ async def handle_admin_receive_new_password(message: Message, state: FSMContext,
     if len(new_pwd) < 8:
         kb = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="admin_site:cancel")],
+                [btn(text="❌ Bekor qilish", callback_data="admin_site:cancel", style="danger", icon="cross")],
             ]
         )
         await message.answer(
@@ -1166,8 +1188,8 @@ async def handle_admin_receive_new_password(message: Message, state: FSMContext,
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🌐 Saytga o'tish", url=site_url)],
-            [InlineKeyboardButton(text="👑 Boshqaruv paneli", callback_data="admin_site:panel")],
+            [btn(text="🌐 Saytga o'tish", url=site_url, style="success", icon="lang")],
+            [btn(text="👑 Boshqaruv paneli", callback_data="admin_site:panel", style="primary", icon="home")],
         ]
     )
     await message.answer(text, reply_markup=kb, disable_web_page_preview=True)

@@ -125,3 +125,26 @@ async def test_site_app_dynamic_password_update():
     from app.site.app import _PASSWORD_HASH_KEY
     assert verify_password(new_pwd, app[_PASSWORD_HASH_KEY])
     assert not verify_password(initial_pwd, app[_PASSWORD_HASH_KEY])
+
+
+def test_admin_panel_and_owner_buttons_have_organized_colors():
+    from app.keyboards.owner import get_owner_inline_menu, get_owner_main_menu
+
+    _, admin_kb = get_admin_panel_content()
+    admin_btns = [b for row in admin_kb.inline_keyboard for b in row]
+    assert len(admin_btns) == 4
+    assert admin_btns[0].style == "primary"  # Login URL
+    assert admin_btns[1].style == "success"  # Generate password
+    assert admin_btns[2].style == "primary"  # Set manual password
+    assert admin_btns[3].style == "danger"   # Close
+
+    owner_inline = get_owner_inline_menu(is_paused=False, lang="uz")
+    for row in owner_inline.inline_keyboard:
+        for b in row:
+            assert b.style in ("primary", "success", "danger"), f"Button {b.text} missing style"
+
+    owner_reply = get_owner_main_menu(lang="uz")
+    for row in owner_reply.keyboard:
+        for b in row:
+            assert b.style in ("primary", "success", "danger"), f"Reply button {b.text} missing style"
+

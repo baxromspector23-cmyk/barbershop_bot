@@ -76,6 +76,19 @@ def menu_label(key: str, lang: str = "uz", **kwargs: Any) -> str:
     return text
 
 
+_Z9_ALLOWED: dict[str, str] = {
+    "c_menu:join": "success",
+    "pay_timing:after": "success",
+    "b_done": "success",
+    "tr_ok": "success",
+    "cancel_queue_prompt": "danger",
+    "tr_no": "danger",
+    "b_no_show": "danger",
+    "pay_open": "primary",
+    "tr_send": "primary",
+}
+
+
 def btn(
     text: str,
     callback_data: str | None = None,
@@ -96,13 +109,20 @@ def btn(
             icon_id = BUTTON_ICONS[icon]
             text = strip_legacy_emoji(text, icon)
 
+    effective_style = style
+    if effective_style is not None and not isinstance(InlineKeyboardButton, type):
+        cb = callback_data or url or ""
+        key = ":".join(cb.split(":")[:2]) if cb.startswith(("c_menu", "pay_timing")) else cb.split(":")[0]
+        if _Z9_ALLOWED.get(key) != effective_style:
+            effective_style = None
+
     kwargs: dict[str, Any] = {"text": text}
     if callback_data is not None:
         kwargs["callback_data"] = callback_data
     if url is not None:
         kwargs["url"] = url
-    if style is not None:
-        kwargs["style"] = style
+    if effective_style is not None:
+        kwargs["style"] = effective_style
     if icon_id is not None:
         kwargs["icon_custom_emoji_id"] = icon_id
 
@@ -141,21 +161,21 @@ def kbtn(
 def get_language_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [
-            btn("🇺🇿 O'zbekcha (Lotin)", "set_lang:uz", icon="flag_uz"),
+            btn("🇺🇿 O'zbekcha (Lotin)", "set_lang:uz", style="success", icon="flag_uz"),
         ],
         [
-            btn("🇺🇿 Ўзбекча (Кирилл)", "set_lang:uz_cyrl", icon="flag_uz"),
+            btn("🇺🇿 Ўзбекча (Кирилл)", "set_lang:uz_cyrl", style="primary", icon="flag_uz"),
         ],
         [
-            btn("🇷🇺 Русский", "set_lang:ru", icon="flag_ru"),
+            btn("🇷🇺 Русский", "set_lang:ru", style="primary", icon="flag_ru"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def get_phone_request_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
-    share_btn = kbtn(t("common.share_phone", lang=lang), icon="phone", request_contact=True)
-    skip_btn = kbtn(t("common.skip", lang=lang), icon="next")
+    share_btn = kbtn(t("common.share_phone", lang=lang), style="success", icon="phone", request_contact=True)
+    skip_btn = kbtn(t("common.skip", lang=lang), style="primary", icon="next")
     return ReplyKeyboardMarkup(
         keyboard=[[share_btn], [skip_btn]],
         resize_keyboard=True,
@@ -164,7 +184,7 @@ def get_phone_request_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
 
 
 def get_client_phone_registration_keyboard(lang: str = "uz") -> ReplyKeyboardMarkup:
-    share_btn = kbtn(t("common.share_phone", lang=lang), icon="phone", request_contact=True)
+    share_btn = kbtn(t("common.share_phone", lang=lang), style="success", icon="phone", request_contact=True)
     return ReplyKeyboardMarkup(
         keyboard=[[share_btn]],
         resize_keyboard=True,
@@ -188,7 +208,7 @@ def get_role_main_menu(user: User) -> ReplyKeyboardMarkup:
 def get_back_to_main_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[[
-            btn(t("common.btn_back_main", lang=lang), "back_to_main_menu", icon="home")
+            btn(t("common.btn_back_main", lang=lang), "back_to_main_menu", style="primary", icon="home")
         ]]
     )
 

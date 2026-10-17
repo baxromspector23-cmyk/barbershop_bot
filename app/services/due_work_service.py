@@ -186,11 +186,13 @@ async def process_due_work(
                     btn(
                         text=t("owner.btn_finish_order", lang=lang, ticket_no=ticket_no),
                         callback_data=f"b_done:{oid_item}",
+                        style="success",
                         icon="scissors",
                     ),
                     btn(
                         text=t("owner.btn_cancel_order", lang=lang, ticket_no=ticket_no),
                         callback_data=f"b_cancel:{oid_item}",
+                        style="danger",
                         icon="forbidden",
                     ),
                 ])
