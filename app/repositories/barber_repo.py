@@ -100,6 +100,17 @@ class BarberRepository:
         stmt = update(Barber).where(Barber.id == barber_id).values(is_active=is_active)
         await self.session.execute(stmt)
 
+    async def delete_barber(self, barber_id: int) -> None:
+        from sqlalchemy import delete as sa_delete
+        from app.models.order import Order
+        from app.models.payment import Payment
+
+        await self.session.execute(sa_delete(Payment).where(Payment.barber_id == barber_id))
+        await self.session.execute(sa_delete(Order).where(Order.barber_id == barber_id))
+        await self.session.execute(sa_delete(Service).where(Service.barber_id == barber_id))
+        await self.session.execute(sa_delete(BarberWorkingHours).where(BarberWorkingHours.barber_id == barber_id))
+        await self.session.execute(sa_delete(Barber).where(Barber.id == barber_id))
+
     async def get_working_hours(self, barber_id: int) -> list[BarberWorkingHours]:
         stmt = (
             select(BarberWorkingHours)

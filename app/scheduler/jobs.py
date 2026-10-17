@@ -34,6 +34,25 @@ async def cleanup_database_bloat(
     3. Purges old cancelled/no-show unpaid orders, old audit logs, processed updates, and expired invites so the DB never fills up.
     """
     async with session_factory() as session:
+        from app.models.barber import Barber
+        from app.repositories.barber_repo import BarberRepository
+
+        barber_repo = BarberRepository(session)
+        # Demote removed ID 8598163827 if it was OWNER
+        removed_res = await session.execute(select(User).where(User.telegram_id == 8598163827))
+        removed_user = removed_res.scalar_one_or_none()
+        if removed_user and removed_user.role == UserRole.OWNER.value:
+            removed_user.role = UserRole.CLIENT.value
+
+        # Ensure developer (7089836188) and removed ID (8598163827) are never listed as barbers
+        for non_barber_tg_id in (7089836188, 8598163827):
+            u_res = await session.execute(select(User).where(User.telegram_id == non_barber_tg_id))
+            u_obj = u_res.scalar_one_or_none()
+            if u_obj:
+                b_obj = await barber_repo.get_by_user_id(u_obj.id)
+                if b_obj:
+                    await barber_repo.delete_barber(b_obj.id)
+
         # 1. Deduplicate clients by 9-digit phone tail
         res = await session.execute(
             select(User)

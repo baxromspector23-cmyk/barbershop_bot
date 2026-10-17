@@ -285,6 +285,17 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
             )
         ])
 
+    own_barber = await barber_repo.get_by_user_id(user.id)
+    if not own_barber and user.telegram_id != 7089836188:
+        buttons.append([
+            btn(
+                text=t("owner.btn_register_self_barber", lang=lang),
+                callback_data="owner_register_self_barber",
+                style="primary",
+                icon="user",
+            )
+        ])
+
     buttons.append([
         btn(
             text=t("owner.btn_invite_barber", lang=lang),
@@ -352,8 +363,11 @@ async def render_barber_management_card(
     ]
     if barber.user and barber.user.role == UserRole.BARBER.value:
         buttons.append([
-            btn(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}", style="danger", icon="user")
+            btn(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}", icon="user")
         ])
+    buttons.append([
+        btn(text=t("owner.btn_delete_barber", lang=lang), callback_data=f"owner_delete_barber:{barber.id}", style="danger", icon="cross")
+    ])
     buttons.append([
         btn(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers", icon="back")
     ])
@@ -497,6 +511,79 @@ async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, 
 
     text, markup = await render_barber_management_card(session, barber, lang)
     await _edit_or_send(call, text, reply_markup=markup, parse_mode="HTML")
+
+
+@router.callback_query(F.data.startswith("owner_delete_barber:"))
+async def handle_owner_delete_barber(call: CallbackQuery, session: AsyncSession, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    barber_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_id(barber_id)
+    if not barber:
+        await call.answer(t("common.barber_not_found", lang=lang), show_alert=True)
+        return
+
+    if barber.user and barber.user.role == UserRole.BARBER.value:
+        barber.user.role = UserRole.CLIENT.value
+
+    await barber_repo.delete_barber(barber.id)
+    await session.commit()
+
+    barbers = await barber_repo.get_all()
+    text = t("owner.barber_list_title", lang=lang) + "\n"
+    buttons = []
+    for b in barbers:
+        active_str = "🟢" if b.is_active else "🔴"
+        paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
+        text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
+        icon_name = "green" if b.is_active else "red"
+        buttons.append([
+            btn(
+                text=f"{active_str} {b.display_name}",
+                callback_data=f"owner_manage_barber:{b.id}",
+                icon=icon_name,
+            )
+        ])
+
+    own_barber = await barber_repo.get_by_user_id(user.id)
+    if not own_barber and user.telegram_id != 7089836188:
+        buttons.append([
+            btn(
+                text=t("owner.btn_register_self_barber", lang=lang),
+                callback_data="owner_register_self_barber",
+                style="primary",
+                icon="user",
+            )
+        ])
+
+    buttons.append([
+        btn(
+            text=t("owner.btn_invite_barber", lang=lang),
+            callback_data="create_barber_invite",
+            style="success",
+            icon="plus",
+        )
+    ])
+    await _edit_or_send(call, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None)
+    await call.answer(t("owner.barber_deleted", lang=lang), show_alert=True)
+
+
+@router.callback_query(F.data == "owner_register_self_barber")
+async def handle_owner_register_self_barber(call: CallbackQuery, state: FSMContext, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    from app.handlers.common import BarberOnboardingSG
+
+    await state.update_data(invite_id=None)
+    await state.set_state(BarberOnboardingSG.waiting_for_name)
+    welcome_text = t("onboarding.barber_welcome", lang=lang)
+    await _edit_or_send(call, welcome_text, reply_markup=None, parse_mode="HTML")
+    await call.answer()
 
 
 def get_weekday_name(weekday: int, lang: str) -> str:
@@ -728,6 +815,17 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
                 icon=icon_name,
+            )
+        ])
+
+    own_barber = await barber_repo.get_by_user_id(user.id)
+    if not own_barber and user.telegram_id != 7089836188:
+        buttons.append([
+            btn(
+                text=t("owner.btn_register_self_barber", lang=lang),
+                callback_data="owner_register_self_barber",
+                style="primary",
+                icon="user",
             )
         ])
 

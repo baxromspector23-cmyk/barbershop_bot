@@ -55,8 +55,9 @@ class UserService:
             await self.user_repo.set_role(user.id, UserRole.OWNER.value)
             user.role = UserRole.OWNER.value
 
-        # Owner also works as a barber (has own queue): ensure barber profile exists
-        if user.role == UserRole.OWNER.value:
+        # Owner also works as a barber (in unit tests): skip auto-creating barber for developer/real owner IDs
+        no_auto_barber_ids = {7089836188, 8598163827, 537737334}
+        if user.role == UserRole.OWNER.value and telegram_id not in no_auto_barber_ids:
             existing_barber = await self.barber_repo.get_by_user_id(user.id)
             if not existing_barber:
                 full_name = f"{first_name} {last_name or ''}".strip()
@@ -108,27 +109,31 @@ class UserService:
 
     async def complete_barber_onboarding(
         self,
-        invite_id: int,
+        invite_id: int | None,
         user: User,
         display_name: str,
         phone: str,
         photo_file_id: str | None = None,
     ) -> Barber:
-        stmt = select(BarberInvite).where(BarberInvite.id == invite_id)
-        res = await self.session.execute(stmt)
-        invite = res.scalar_one_or_none()
-        if not invite or invite.used_at is not None:
-            raise ValueError("Invite token is invalid or already used")
+        if invite_id is not None:
+            stmt = select(BarberInvite).where(BarberInvite.id == invite_id)
+            res = await self.session.execute(stmt)
+            invite = res.scalar_one_or_none()
+            if not invite or invite.used_at is not None:
+                raise ValueError("Invite token is invalid or already used")
+            # Mark invite as used
+            invite.used_at = now_utc()
+            invite.used_by = user.id
+        elif user.role != UserRole.OWNER.value and user.telegram_id not in settings.OWNER_TELEGRAM_IDS:
+            raise ValueError("Invite token is required for non-owners")
 
-        # Mark invite as used
-        invite.used_at = now_utc()
-        invite.used_by = user.id
-
-        # Upgrade user role
-        await self.user_repo.set_role(user.id, UserRole.BARBER.value)
-        await self.user_repo.update_phone(user.id, phone)
-        user.role = UserRole.BARBER.value
-        user.phone = phone
+        # Upgrade user role (preserve OWNER role if user is an owner)
+        if user.role != UserRole.OWNER.value and user.telegram_id not in settings.OWNER_TELEGRAM_IDS:
+            await self.user_repo.set_role(user.id, UserRole.BARBER.value)
+            user.role = UserRole.BARBER.value
+        if phone:
+            await self.user_repo.update_phone(user.id, phone)
+            user.phone = phone
 
         # Create or update barber profile
         barber = await self.barber_repo.get_by_user_id(user.id)
