@@ -111,8 +111,14 @@ async def handle_noop_closed(call: CallbackQuery, lang: str):
     await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
 
 
+def _is_photo_msg(msg) -> bool:
+    photo = getattr(msg, "photo", None)
+    return isinstance(photo, (list, tuple)) and len(photo) > 0
+
+
 @router.callback_query(F.data.startswith("choose_barber:"))
 async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang: str):
+    import html
     target = call.data.split(":")[1]
     barber_repo = BarberRepository(session)
     qs = QueueService(session)
@@ -124,13 +130,13 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
         for b in active_barbers:
             q_len, wait_min = await qs.get_barber_queue_metrics(b.id)
             if qs.is_barber_open(b, wait_min) and q_len < settings.MAX_QUEUE_PER_BARBER:
-                candidates.append((b, wait_min))
+                candidates.append((b, q_len, wait_min))
 
         if not candidates:
             await call.answer(t("client.barber_closed", lang=lang), show_alert=True)
             return
-        candidates.sort(key=lambda c: c[1])
-        selected_barber = candidates[0][0]
+        candidates.sort(key=lambda c: c[2])
+        selected_barber, q_len, wait_min = candidates[0]
     else:
         barber_id = int(target)
         selected_barber = await barber_repo.get_by_id(barber_id)
@@ -148,9 +154,44 @@ async def handle_choose_barber(call: CallbackQuery, session: AsyncSession, lang:
         await call.answer(t("client.no_active_services", lang=lang), show_alert=True)
         return
 
-    prompt = f"💈 {selected_barber.display_name}\n\n{t('client.choose_service', lang=lang)}"
+    svc_lines = []
+    for s in services:
+        item_line = t(
+            "client.service_item",
+            lang=lang,
+            name=html.escape(s.name),
+            price=format_money(s.price),
+            duration=s.duration_minutes,
+        )
+        svc_lines.append(f"• {item_line}")
+
+    prompt = t(
+        "client.barber_rich_card",
+        lang=lang,
+        name=html.escape(selected_barber.display_name),
+        queue_len=q_len,
+        wait_min=wait_min,
+        services_list="\n".join(svc_lines),
+    )
     markup = get_services_keyboard(services, selected_barber.id, lang=lang)
-    await call.message.edit_text(prompt, reply_markup=markup)
+
+    photo_id = getattr(selected_barber, "photo_file_id", None)
+    if isinstance(photo_id, str) and photo_id and hasattr(call.message, "answer_photo"):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer_photo(
+            photo=photo_id,
+            caption=prompt,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+    else:
+        try:
+            await call.message.edit_text(prompt, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            await call.message.answer(prompt, reply_markup=markup, parse_mode="HTML")
     await call.answer()
 
 
@@ -168,7 +209,17 @@ async def handle_back_to_barbers(call: CallbackQuery, session: AsyncSession, use
 
     prompt = t("client.choose_barber", lang=lang)
     markup = get_barbers_keyboard(barbers_with_metrics, lang=lang)
-    await call.message.edit_text(prompt, reply_markup=markup)
+    if _is_photo_msg(call.message):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer(prompt, reply_markup=markup)
+    else:
+        try:
+            await call.message.edit_text(prompt, reply_markup=markup)
+        except Exception:
+            await call.message.answer(prompt, reply_markup=markup)
     await call.answer()
 
 
@@ -212,7 +263,17 @@ async def handle_choose_service(call: CallbackQuery, session: AsyncSession, lang
         wait_min=wait_min,
     ) + "\n" + t("client.eta_line", lang=lang, eta=QueueService.estimated_start_text(wait_min))
     markup = get_payment_timing_keyboard(barber_id, service_id, lang=lang)
-    await call.message.edit_text(confirm_text, reply_markup=markup)
+    if _is_photo_msg(call.message):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer(confirm_text, reply_markup=markup)
+    else:
+        try:
+            await call.message.edit_text(confirm_text, reply_markup=markup)
+        except Exception:
+            await call.message.answer(confirm_text, reply_markup=markup)
     await call.answer()
 
 

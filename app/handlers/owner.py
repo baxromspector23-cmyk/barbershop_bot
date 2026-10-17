@@ -57,8 +57,27 @@ class EditScheduleSG(StatesGroup):
     waiting_for_hours = State()
 
 
+class EditBarberPhotoSG(StatesGroup):
+    waiting_for_photo = State()
+
+
 def is_owner(user: User) -> bool:
     return user.role == UserRole.OWNER.value
+
+
+async def _edit_or_send(call: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup | None = None, parse_mode: str | None = "HTML") -> None:
+    photo = getattr(call.message, "photo", None)
+    if isinstance(photo, (list, tuple)) and len(photo) > 0:
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    else:
+        try:
+            await call.message.edit_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+        except Exception:
+            await call.message.answer(text, reply_markup=reply_markup, parse_mode=parse_mode)
 
 
 # -------------------------------------------------------------
@@ -172,10 +191,10 @@ async def handle_owner_info_menu(event: Message | CallbackQuery, session: AsyncS
                 btn(text=t("owner.btn_pending_receipts_count", lang=lang, count=len(pending_receipts)), callback_data="b_menu:pending_receipts", style="primary", icon="receipt"),
             ],
             [
-                btn(text=t("owner.btn_all_clients", lang=lang), callback_data="o_clients:1", style="success", icon="users"),
+                btn(text=t("owner.btn_all_clients", lang=lang), callback_data="o_clients:1", icon="users"),
             ],
             [
-                btn(text=t("common.back_btn", lang=lang), callback_data="back_to_main_menu", style="primary", icon="back"),
+                btn(text=t("common.back_btn", lang=lang), callback_data="back_to_main_menu", icon="back"),
             ],
         ]
     )
@@ -210,15 +229,15 @@ async def handle_owner_clients_list(call: CallbackQuery, session: AsyncSession, 
 
     nav_btns = []
     if page > 1:
-        nav_btns.append(btn(text=t("owner.btn_prev_page", lang=lang), callback_data=f"o_clients:{page - 1}", style="primary", icon="back"))
+        nav_btns.append(btn(text=t("owner.btn_prev_page", lang=lang), callback_data=f"o_clients:{page - 1}", icon="back"))
     if offset + per_page < total_clients:
-        nav_btns.append(btn(text=t("owner.btn_next_page", lang=lang), callback_data=f"o_clients:{page + 1}", style="primary", icon="next"))
+        nav_btns.append(btn(text=t("owner.btn_next_page", lang=lang), callback_data=f"o_clients:{page + 1}", icon="next"))
 
     rows = []
     if nav_btns:
         rows.append(nav_btns)
     rows.append([
-        btn(text=t("common.back_btn", lang=lang), callback_data="o_menu:info", style="primary", icon="back"),
+        btn(text=t("common.back_btn", lang=lang), callback_data="o_menu:info", icon="back"),
     ])
 
     await call.message.edit_text("\n\n".join(lines), reply_markup=InlineKeyboardMarkup(inline_keyboard=rows), parse_mode="HTML")
@@ -258,12 +277,10 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
         icon_name = "green" if b.is_active else "red"
-        b_style = "success" if b.is_active else "danger"
         buttons.append([
             btn(
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
-                style=b_style,
                 icon=icon_name,
             )
         ])
@@ -280,12 +297,11 @@ async def handle_barbers_list(event: Message | CallbackQuery, session: AsyncSess
         btn(
             text=t("common.btn_back_main", lang=lang),
             callback_data="back_to_main_menu",
-            style="primary",
             icon="home",
         )
     ])
     if is_cb:
-        await target_msg.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+        await _edit_or_send(event, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode=None)
     else:
         await target_msg.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
@@ -325,11 +341,13 @@ async def render_barber_management_card(
 
     toggle_btn_text = t("owner.btn_deactivate", lang=lang) if barber.is_active else t("owner.btn_activate", lang=lang)
     toggle_icon = "red" if barber.is_active else "green"
-    toggle_style = "danger" if barber.is_active else "success"
     buttons = [
         [
-            btn(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}", style=toggle_style, icon=toggle_icon),
-            btn(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}", style="primary", icon="scissors"),
+            btn(text=toggle_btn_text, callback_data=f"owner_toggle_barber_active:{barber.id}", icon=toggle_icon),
+            btn(text=t("owner.btn_barber_services", lang=lang), callback_data=f"owner_barber_services:{barber.id}", icon="scissors"),
+        ],
+        [
+            btn(text=t("owner.btn_barber_photo", lang=lang), callback_data=f"owner_set_photo:{barber.id}", style="primary", icon="edit"),
         ],
     ]
     if barber.user and barber.user.role == UserRole.BARBER.value:
@@ -337,7 +355,7 @@ async def render_barber_management_card(
             btn(text=t("owner.btn_revoke_admin", lang=lang), callback_data=f"owner_revoke_admin:{barber.id}", style="danger", icon="user")
         ])
     buttons.append([
-        btn(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers", style="primary", icon="back")
+        btn(text=t("owner.btn_back_to_barbers", lang=lang), callback_data="owner_back_to_barbers", icon="back")
     ])
     return text, InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -356,8 +374,82 @@ async def handle_owner_manage_barber(call: CallbackQuery, session: AsyncSession,
         return
 
     text, markup = await render_barber_management_card(session, barber, lang)
-    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    if barber.photo_file_id and hasattr(call.message, "answer_photo"):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer_photo(
+            photo=barber.photo_file_id,
+            caption=text,
+            reply_markup=markup,
+            parse_mode="HTML",
+        )
+    else:
+        await _edit_or_send(call, text, reply_markup=markup, parse_mode="HTML")
     await call.answer()
+
+
+@router.callback_query(F.data.startswith("owner_set_photo:"))
+async def handle_owner_set_photo_prompt(call: CallbackQuery, session: AsyncSession, state: FSMContext, user: User, lang: str):
+    if not is_owner(user):
+        await call.answer(t("barber.permission_denied", lang=lang), show_alert=True)
+        return
+
+    barber_id = int(call.data.split(":")[1])
+    barber_repo = BarberRepository(session)
+    barber = await barber_repo.get_by_id(barber_id)
+    if not barber:
+        await call.answer(t("common.barber_not_found", lang=lang), show_alert=True)
+        return
+
+    await state.set_state(EditBarberPhotoSG.waiting_for_photo)
+    await state.update_data(target_barber_id=barber.id)
+    prompt = t("owner.prompt_barber_photo", lang=lang, name=html.escape(barber.display_name))
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [btn(text=t("common.cancel_btn", lang=lang), callback_data=f"owner_manage_barber:{barber.id}", icon="cross")],
+        ]
+    )
+    await _edit_or_send(call, prompt, reply_markup=kb, parse_mode="HTML")
+    await call.answer()
+
+
+@router.message(EditBarberPhotoSG.waiting_for_photo)
+async def handle_owner_receive_barber_photo(message: Message, session: AsyncSession, state: FSMContext, user: User, lang: str):
+    if not is_owner(user):
+        await state.clear()
+        return
+
+    if not message.photo:
+        await message.answer(t("onboarding.barber_photo_required", lang=lang))
+        return
+
+    photo_file_id = message.photo[-1].file_id
+    data = await state.get_data()
+    barber_id = data.get("target_barber_id")
+    await state.clear()
+
+    if not barber_id:
+        return
+
+    barber_repo = BarberRepository(session)
+    await barber_repo.update_profile(barber_id, photo_file_id=photo_file_id)
+    await session.commit()
+
+    await message.answer(t("owner.barber_photo_saved", lang=lang))
+    barber = await barber_repo.get_by_id(barber_id)
+    if barber:
+        text, markup = await render_barber_management_card(session, barber, lang)
+        if barber.photo_file_id and hasattr(message, "answer_photo"):
+            await message.answer_photo(
+                photo=barber.photo_file_id,
+                caption=text,
+                reply_markup=markup,
+                parse_mode="HTML",
+            )
+        else:
+            await message.answer(text, reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("owner_toggle_barber_active:"))
@@ -378,7 +470,7 @@ async def handle_owner_toggle_barber_active(call: CallbackQuery, session: AsyncS
 
     barber = await barber_repo.get_by_id(barber_id)
     text, markup = await render_barber_management_card(session, barber, lang)
-    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    await _edit_or_send(call, text, reply_markup=markup, parse_mode="HTML")
 
 
 @router.callback_query(F.data.startswith("owner_revoke_admin:"))
@@ -404,7 +496,7 @@ async def handle_owner_revoke_admin(call: CallbackQuery, session: AsyncSession, 
     await call.answer(t("owner.admin_revoked", lang=lang), show_alert=True)
 
     text, markup = await render_barber_management_card(session, barber, lang)
-    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    await _edit_or_send(call, text, reply_markup=markup, parse_mode="HTML")
 
 
 def get_weekday_name(weekday: int, lang: str) -> str:
@@ -437,13 +529,11 @@ async def render_barber_schedule_view(
             status_text = "00:00 - 24:00"
             btn_text = f"🟢 {day_name}: {status_text}"
         icon_name = "red" if is_off else "green"
-        b_style = "danger" if is_off else "success"
         lines.append(t("owner.schedule_item", lang=lang, day=day_name, status=status_text))
         buttons.append([
             btn(
                 text=btn_text,
                 callback_data=f"owner_edit_wh:{barber.id}:{day_idx}",
-                style=b_style,
                 icon=icon_name,
             )
         ])
@@ -452,7 +542,6 @@ async def render_barber_schedule_view(
         btn(
             text=t("owner.btn_back_to_barber_info", lang=lang),
             callback_data=f"owner_manage_barber:{barber.id}",
-            style="primary",
             icon="back",
         )
     ])
@@ -478,7 +567,7 @@ async def handle_owner_barber_schedule(call: CallbackQuery, session: AsyncSessio
         return
 
     text, markup = await render_barber_schedule_view(session, barber, lang)
-    await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+    await _edit_or_send(call, text, reply_markup=markup, parse_mode="HTML")
     await call.answer()
 
 
@@ -515,14 +604,13 @@ async def handle_owner_edit_wh(call: CallbackQuery, session: AsyncSession, user:
     )
     toggle_text = t("owner.btn_make_workday", lang=lang) if (wh and wh.is_day_off) else t("owner.btn_make_dayoff", lang=lang)
     toggle_icon = "green" if (wh and wh.is_day_off) else "red"
-    toggle_style = "success" if (wh and wh.is_day_off) else "danger"
     buttons = [
         [
-            btn(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}", style=toggle_style, icon=toggle_icon),
-            btn(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}", style="primary", icon="edit"),
+            btn(text=toggle_text, callback_data=f"owner_toggle_dayoff:{barber_id}:{weekday}", icon=toggle_icon),
+            btn(text=t("owner.btn_change_hours", lang=lang), callback_data=f"owner_set_hours_prompt:{barber_id}:{weekday}", icon="edit"),
         ],
         [
-            btn(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}", style="primary", icon="back"),
+            btn(text=t("owner.btn_back_to_schedule", lang=lang), callback_data=f"owner_barber_schedule:{barber_id}", icon="back"),
         ],
     ]
     await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons), parse_mode="HTML")
@@ -635,12 +723,10 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
         paused_str = t("owner.status_paused", lang=lang) if b.is_paused else ""
         text += f"\n{active_str} #{b.id} {b.display_name}{paused_str}"
         icon_name = "green" if b.is_active else "red"
-        b_style = "success" if b.is_active else "danger"
         buttons.append([
             btn(
                 text=f"{active_str} {b.display_name}",
                 callback_data=f"owner_manage_barber:{b.id}",
-                style=b_style,
                 icon=icon_name,
             )
         ])
@@ -653,7 +739,15 @@ async def handle_owner_back_to_barbers(call: CallbackQuery, session: AsyncSessio
             icon="plus",
         )
     ])
-    await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    photo = getattr(call.message, "photo", None)
+    if isinstance(photo, (list, tuple)) and len(photo) > 0:
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
+        await call.message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    else:
+        await call.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await call.answer()
 
 
@@ -712,7 +806,6 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
             btn(
                 text=f"💈 {b.display_name}",
                 callback_data=f"owner_barber_services:{b.id}",
-                style="primary",
                 icon="barbershop",
             )
         ])
@@ -720,7 +813,6 @@ async def handle_owner_services_menu(event: Message | CallbackQuery, session: As
         btn(
             text=t("common.btn_back_main", lang=lang),
             callback_data="back_to_main_menu",
-            style="primary",
             icon="home",
         )
     ])
@@ -748,12 +840,10 @@ async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSessio
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
         icon_name = "green" if s.is_active else "red"
-        s_style = "success" if s.is_active else "danger"
         rows.append([
             btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
-                style=s_style,
                 icon=icon_name,
             )
         ])
@@ -767,7 +857,8 @@ async def handle_owner_barber_services(call: CallbackQuery, session: AsyncSessio
     ])
     hint = t("owner.barber_services_hint", lang=lang)
     header_text = t("owner.barber_services_header", lang=lang, name=barber.display_name, hint=hint)
-    await call.message.edit_text(
+    await _edit_or_send(
+        call,
         header_text,
         reply_markup=InlineKeyboardMarkup(inline_keyboard=rows),
         parse_mode="HTML",
@@ -993,18 +1084,18 @@ async def handle_block_query(
 # -------------------------------------------------------------
 # Katta Barber: /admin Website & Credentials Management
 # -------------------------------------------------------------
-def get_admin_panel_content() -> tuple[str, InlineKeyboardMarkup]:
-    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}/login"
-    login_user = settings.SITE_USERNAME
-    cur_pwd = get_current_password_display()
+def get_admin_panel_content(lang: str = "uz") -> tuple[str, InlineKeyboardMarkup]:
+    login_suffix = t("admin_site.login_path", lang=lang)
+    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}{login_suffix}"
+    login_user = html.escape(settings.SITE_USERNAME)
+    cur_pwd = html.escape(get_current_password_display())
 
-    text = (
-        "👑 <b>KATTA BARBER — SAYT BOSHQARUV PANELI</b>\n\n"
-        f"🌐 <b>Sayt manzili (URL):</b>\n<code>{site_url}</code>\n\n"
-        f"👤 <b>Login:</b> <code>{login_user}</code>\n"
-        f"🔑 <b>Joriy parol:</b> <code>{cur_pwd}</code>\n\n"
-        "💡 <i>Saytda barcha mijozlar bazasi, telefon raqamlari va to'lov kvitansiyalari mavjud.\n\n"
-        "Agar parolni unutgan bo'lsangiz yoki yangilamoqchi bo'lsangiz, quyidagi tugmalardan birini bosing:</i>"
+    text = t(
+        "admin_site.panel_text",
+        lang=lang,
+        site_url=site_url,
+        login_user=login_user,
+        cur_pwd=cur_pwd,
     )
 
     kb = InlineKeyboardMarkup(
@@ -1022,7 +1113,6 @@ def get_admin_panel_content() -> tuple[str, InlineKeyboardMarkup]:
                 btn(
                     text="✏️ O'zim yangi parol yozaman",
                     callback_data="admin_site:set_pwd",
-                    style="primary",
                     icon="edit",
                 ),
             ],
@@ -1040,26 +1130,28 @@ def get_admin_panel_content() -> tuple[str, InlineKeyboardMarkup]:
 
 
 @router.message(Command("admin"))
-async def handle_admin_command(message: Message, user: User, lang: str):
+async def handle_admin_command(message: Message, user: User, lang: str = "uz", state: FSMContext | None = None):
+    if state is not None:
+        await state.clear()
     if not (is_owner(user) or (message.from_user and message.from_user.id in settings.OWNER_TELEGRAM_IDS)):
-        await message.answer("⛔ Kechirasiz, bu buyruq faqat katta barber (rahbar) uchun mo'ljallangan.")
+        await message.answer(t("admin_site.access_denied", lang=lang))
         return
 
-    text, kb = get_admin_panel_content()
-    await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+    text, kb = get_admin_panel_content(lang=lang)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
 
 
 @router.callback_query(F.data == "admin_site:panel")
-async def handle_admin_panel_return(call: CallbackQuery, user: User):
+async def handle_admin_panel_return(call: CallbackQuery, user: User, lang: str = "uz"):
     if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
-        await call.answer("Ruxsat berilmagan!", show_alert=True)
+        await call.answer(t("admin_site.not_allowed", lang=lang), show_alert=True)
         return
 
-    text, kb = get_admin_panel_content()
+    text, kb = get_admin_panel_content(lang=lang)
     try:
-        await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+        await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
-        await call.message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+        await call.message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
     await call.answer()
 
 
@@ -1077,79 +1169,76 @@ async def handle_admin_panel_close(call: CallbackQuery, user: User):
 
 
 @router.callback_query(F.data == "admin_site:cancel")
-async def handle_admin_panel_cancel(call: CallbackQuery, state: FSMContext, user: User):
+async def handle_admin_panel_cancel(call: CallbackQuery, state: FSMContext, user: User, lang: str = "uz"):
     if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
         await call.answer()
         return
 
     await state.clear()
-    text, kb = get_admin_panel_content()
+    text, kb = get_admin_panel_content(lang=lang)
     try:
-        await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+        await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
-        await call.message.answer(text, reply_markup=kb, disable_web_page_preview=True)
-    await call.answer("Bekor qilindi")
+        await call.message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    await call.answer(t("admin_site.cancelled", lang=lang))
 
 
 @router.callback_query(F.data == "admin_site:gen_pwd")
-async def handle_admin_generate_password(call: CallbackQuery, user: User):
+async def handle_admin_generate_password(call: CallbackQuery, user: User, lang: str = "uz"):
     if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
-        await call.answer("Ruxsat berilmagan!", show_alert=True)
+        await call.answer(t("admin_site.not_allowed", lang=lang), show_alert=True)
         return
 
     new_pwd = generate_secure_password()
     ok, msg = await apply_new_site_password(new_pwd)
     if not ok:
-        await call.answer(f"Xatolik: {msg}", show_alert=True)
+        await call.answer(t("admin_site.err_prefix", lang=lang, msg=msg), show_alert=True)
         return
 
-    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}/login"
-    text = (
-        "✅ <b>Yangi sayt paroli muvaffaqiyatli yaratildi va o'rnatildi!</b>\n\n"
-        f"🌐 <b>Sayt manzili:</b> <code>{site_url}</code>\n"
-        f"👤 <b>Login:</b> <code>{settings.SITE_USERNAME}</code>\n"
-        f"🔑 <b>Yangi parol:</b> <code>{new_pwd}</code>\n\n"
-        "⚠️ <b>Muhim:</b> <i>Ushbu parolni nusxalab oling (ustiga bossangiz nusxalanadi). Yangi parol darhol saytda va serverda faollashdi!</i>"
+    login_suffix = t("admin_site.login_path", lang=lang)
+    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}{login_suffix}"
+    text = t(
+        "admin_site.pwd_generated_text",
+        lang=lang,
+        site_url=site_url,
+        login_user=html.escape(settings.SITE_USERNAME),
+        new_pwd=html.escape(new_pwd),
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [btn(text="🌐 Saytni ochish", url=site_url, style="success", icon="lang")],
-            [btn(text="⬅️ Boshqaruv paneliga qaytish", callback_data="admin_site:panel", style="primary", icon="back")],
+            [btn(text="⬅️ Boshqaruv paneliga qaytish", callback_data="admin_site:panel", icon="back")],
         ]
     )
     try:
-        await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+        await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
     except Exception:
-        await call.message.answer(text, reply_markup=kb, disable_web_page_preview=True)
-    await call.answer("Yangi parol o'rnatildi!", show_alert=True)
+        await call.message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)
+    await call.answer(t("admin_site.pwd_set_toast", lang=lang), show_alert=True)
 
 
 @router.callback_query(F.data == "admin_site:set_pwd")
-async def handle_admin_set_password_prompt(call: CallbackQuery, state: FSMContext, user: User):
+async def handle_admin_set_password_prompt(call: CallbackQuery, state: FSMContext, user: User, lang: str = "uz"):
     if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
-        await call.answer("Ruxsat berilmagan!", show_alert=True)
+        await call.answer(t("admin_site.not_allowed", lang=lang), show_alert=True)
         return
 
     await state.set_state(AdminSiteSG.waiting_for_new_site_password)
-    text = (
-        "✏️ <b>Yangi sayt parolini yozib yuboring:</b>\n\n"
-        "<i>Talablar: kamida 8 ta belgidan iborat bo'lsin.</i>\n\n"
-        "🔒 <b>Xavfsizlik kafolati:</b> Siz yozgan xabar bot tomonidan darhol o'chirib yuboriladi, chat tarixida qolmaydi."
-    )
+    text = t("admin_site.pwd_prompt_text", lang=lang)
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [btn(text="❌ Bekor qilish", callback_data="admin_site:cancel", style="danger", icon="cross")],
         ]
     )
     try:
-        await call.message.edit_text(text, reply_markup=kb)
+        await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
     except Exception:
-        await call.message.answer(text, reply_markup=kb)
+        await call.message.answer(text, reply_markup=kb, parse_mode="HTML")
     await call.answer()
 
 
 @router.message(AdminSiteSG.waiting_for_new_site_password)
-async def handle_admin_receive_new_password(message: Message, state: FSMContext, user: User):
+async def handle_admin_receive_new_password(message: Message, state: FSMContext, user: User, lang: str = "uz"):
     if not (is_owner(user) or (message.from_user and message.from_user.id in settings.OWNER_TELEGRAM_IDS)):
         return
 
@@ -1167,29 +1256,31 @@ async def handle_admin_receive_new_password(message: Message, state: FSMContext,
             ]
         )
         await message.answer(
-            "⚠️ <b>Parol juda qisqa!</b> Kamida 8 ta belgidan iborat bo'lishi kerak.\nQaytadan kiriting:",
+            t("admin_site.pwd_too_short", lang=lang),
             reply_markup=kb,
+            parse_mode="HTML",
         )
         return
 
     ok, msg = await apply_new_site_password(new_pwd)
     if not ok:
-        await message.answer(f"❌ Xatolik yuz berdi: {msg}")
+        await message.answer(t("admin_site.pwd_err_msg", lang=lang, msg=msg))
         return
 
     await state.clear()
-    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}/login"
-    text = (
-        "✅ <b>Yangi sayt paroli muvaffaqiyatli qabul qilindi va o'rnatildi!</b>\n\n"
-        f"🌐 <b>Sayt manzili:</b> <code>{site_url}</code>\n"
-        f"👤 <b>Login:</b> <code>{settings.SITE_USERNAME}</code>\n"
-        f"🔑 <b>O'rnatilgan yangi parol:</b> <code>{new_pwd}</code>\n\n"
-        "⚠️ <i>Parol saytda va serverda faollashtirildi. Xavfsiz joyga saqlab qo'ying!</i>"
+    login_suffix = t("admin_site.login_path", lang=lang)
+    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}{login_suffix}"
+    text = t(
+        "admin_site.pwd_saved_text",
+        lang=lang,
+        site_url=site_url,
+        login_user=html.escape(settings.SITE_USERNAME),
+        new_pwd=html.escape(new_pwd),
     )
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
             [btn(text="🌐 Saytga o'tish", url=site_url, style="success", icon="lang")],
-            [btn(text="👑 Boshqaruv paneli", callback_data="admin_site:panel", style="primary", icon="home")],
+            [btn(text="👑 Boshqaruv paneli", callback_data="admin_site:panel", icon="home")],
         ]
     )
-    await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+    await message.answer(text, reply_markup=kb, parse_mode="HTML", disable_web_page_preview=True)

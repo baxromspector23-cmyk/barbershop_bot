@@ -53,6 +53,7 @@ client:
   barber_item: "{name} (Navbat: {queue_len} kishi, kutilish: ~{wait_min} daq)"
   barber_unavailable: "{name} (Hozir qabul qilmaydi)"
   choose_service: "Xizmatni tanlang:"
+  barber_rich_card: "💈 <b>{name}</b>\n━━━━━━━━━━━━━━━━━━━\n🟢 <b>Holati:</b> Ishda (Qabul ochiq)\n👥 <b>Navbatda:</b> {queue_len} kishi\n⏳ <b>Taxminiy kutish:</b> ~{wait_min} daqiqa\n\n✂️ <b>Xizmatlar va narxlar:</b>\n{services_list}\n\n👇 <i>Marhamat, kerakli xizmatni tanlang:</i>"
   service_item: "{name} — {price} ({duration} daq)"
   confirm_order: "📋 Navbat ma'lumotlari:\nBarber: {barber}\nXizmat: {service}\nNarxi: {price}\nNavbatdagi o'rningiz: {pos}\nSizdan oldin: {ahead} kishi\nKutilayotgan vaqt: ~{wait_min} daqiqa\n\nTo'lov vaqtini tanlang:"
   pay_now: "💳 Hozir to'layman"
@@ -210,6 +211,9 @@ owner:
   btn_deactivate: "🔴 O'chirish"
   btn_activate: "🟢 Faollashtirish"
   btn_barber_services: "✂️ Xizmatlari"
+  btn_barber_photo: "📸 Rasmni o'zgartirish"
+  prompt_barber_photo: "📸 <b>{name}</b> uchun yangi profil rasmini (fotosurat) yuboring:"
+  barber_photo_saved: "✅ Barber rasmi muvaffaqiyatli saqlandi! Endi mijozlar ushbu barberni tanlaganda rasm bilan ko'radi."
   btn_revoke_admin: "👤 Adminlikni bekor qilish"
   btn_back_to_barbers: "⬅️ Barberlar ro'yxati"
   schedule_view_title: "🕒 <b>{name}</b> ish vaqti jadvali:\n"
@@ -233,7 +237,8 @@ owner:
 onboarding:
   barber_welcome: "Xush kelibsiz! Siz barber sifatida taklif qilindingiz.\nIltimos, ismingizni kiriting:"
   barber_phone_request: "Iltimos, telefon raqamingizni yuboring (tugmani bosing):"
-  barber_photo_request: "Iltimos, profilingiz uchun fotosurat yuboring (yoki 'O'tkazib yuborish' tugmasini bosing):"
+  barber_photo_request: "📸 Iltimos, profilingiz uchun sifatli rasmingizni (fotosurat) yuboring. Bu rasm mijozlar sizni tanlaganda ko'rinadi:"
+  barber_photo_required: "⚠️ Iltimos, barber profili uchun rasmingizni (fotosurat sifatida) yuboring:"
   barber_activated: "Tabriklaymiz! Siz muvaffaqiyatli barber sifatida ro'yxatdan o'tdingiz."
   invalid_invite: "Taklif havolasi yaroqsiz yoki muddati o'tgan."
 
@@ -286,3 +291,18 @@ payments:
   amount_mismatch_notify_owner: "⚠️ Buyurtma #{order_id} uchun noto'g'ri summa keldi ({charge_id}): {amount} so'm (kutilgan: {expected} so'm). Qaytarish kutilmoqda."
   critical_failure_notify_owner: "🚨 DIQQAT: To'lovni yozishda xatolik yuz berdi! Buyurtma #{order_id}, to'lov ID: {charge_id}, summa: {amount} so'm, usul: {method}. Xato: {error}"
   customer_payment_record_failed: "⚠️ To'lovingiz qabul qilindi, lekin tizimda qayd etishda xatolik yuz berdi. Iltimos, qayta to'lov qilmang! Administrator to'lovni tekshirib, buyurtmangizni tasdiqlaydi."
+
+admin_site:
+  login_path: "/login"
+  panel_text: "👑 <b>KATTA BARBER — SAYT BOSHQARUV PANELI</b>\n━━━━━━━━━━━━━━━━━━━\n🌐 <b>Sayt manzili (URL):</b>\n{site_url}\n\n👤 <b>Login:</b> <code>{login_user}</code>\n🔑 <b>Joriy parol:</b> <code>{cur_pwd}</code>\n\n💡 <i>Saytda barcha mijozlar bazasi, telefon raqamlari va to'lov kvitansiyalari mavjud.\nAgar parolni unutgan bo'lsangiz yoki yangilamoqchi bo'lsangiz, quyidagi tugmalardan birini bosing:</i>"
+  access_denied: "⛔ Kechirasiz, bu buyruq faqat katta barber (rahbar) uchun mo'ljallangan."
+  not_allowed: "Ruxsat berilmagan!"
+  cancelled: "Bekor qilindi"
+  err_prefix: "Xatolik: {msg}"
+  pwd_generated_text: "✅ <b>Yangi sayt paroli muvaffaqiyatli yaratildi va o'rnatildi!</b>\n\n🌐 <b>Sayt manzili:</b>\n{site_url}\n\n👤 <b>Login:</b> <code>{login_user}</code>\n🔑 <b>Yangi parol:</b> <code>{new_pwd}</code>\n\n⚠️ <b>Muhim:</b> <i>Ushbu parolni nusxalab oling (ustiga bossangiz nusxalanadi). Yangi parol darhol saytda va serverda faollashdi!</i>"
+  pwd_set_toast: "Yangi parol o'rnatildi!"
+  pwd_prompt_text: "✏️ <b>Yangi sayt parolini yozib yuboring:</b>\n\n<i>Talablar: kamida 8 ta belgidan iborat bo'lsin.</i>\n\n🔒 <b>Xavfsizlik kafolati:</b> Siz yozgan xabar bot tomonidan darhol o'chirib yuboriladi, chat tarixida qolmaydi."
+  pwd_too_short: "⚠️ <b>Parol juda qisqa!</b> Kamida 8 ta belgidan iborat bo'lishi kerak.\nQaytadan kiriting:"
+  pwd_err_msg: "❌ Xatolik yuz berdi: {msg}"
+  pwd_saved_text: "✅ <b>Yangi sayt paroli muvaffaqiyatli qabul qilindi va o'rnatildi!</b>\n\n🌐 <b>Sayt manzili:</b>\n{site_url}\n\n👤 <b>Login:</b> <code>{login_user}</code>\n🔑 <b>O'rnatilgan yangi parol:</b> <code>{new_pwd}</code>\n\n⚠️ <i>Parol saytda va serverda faollashtirildi. Xavfsiz joyga saqlab qo'ying!</i>"
+

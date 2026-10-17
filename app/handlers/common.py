@@ -249,13 +249,25 @@ async def handle_set_language(
     await call.message.answer(text, reply_markup=markup, parse_mode="HTML")
 
 
+def _is_photo_msg(msg) -> bool:
+    photo = getattr(msg, "photo", None)
+    return isinstance(photo, (list, tuple)) and len(photo) > 0
+
+
 @router.callback_query(F.data == "back_to_main_menu")
 async def handle_back_to_main_menu(call: CallbackQuery, session: AsyncSession, user: User):
     text, markup = await render_role_main_dashboard(session, user)
-    try:
-        await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
-    except Exception:
+    if _is_photo_msg(call.message):
+        try:
+            await call.message.delete()
+        except Exception:
+            pass
         await call.message.answer(text, reply_markup=markup, parse_mode="HTML")
+    else:
+        try:
+            await call.message.edit_text(text, reply_markup=markup, parse_mode="HTML")
+        except Exception:
+            await call.message.answer(text, reply_markup=markup, parse_mode="HTML")
     await call.answer()
 
 
@@ -327,6 +339,11 @@ async def handle_onboarding_photo(
     photo_file_id = None
     if message.photo:
         photo_file_id = message.photo[-1].file_id
+    else:
+        txt = (message.text or "").strip()
+        if txt not in ("/skip", t("common.skip", lang="uz"), t("common.skip", lang="uz_cyrl"), t("common.skip", lang="ru")):
+            await message.answer(t("onboarding.barber_photo_required", lang=lang))
+            return
 
     data = await state.get_data()
     invite_id = data.get("invite_id")
@@ -345,6 +362,13 @@ async def handle_onboarding_photo(
     await state.clear()
 
     success_text = t("onboarding.barber_activated", lang=lang)
-    await message.answer(success_text, reply_markup=ReplyKeyboardRemove())
+    if isinstance(photo_file_id, str) and photo_file_id and hasattr(message, "answer_photo"):
+        await message.answer_photo(
+            photo=photo_file_id,
+            caption=success_text,
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    else:
+        await message.answer(success_text, reply_markup=ReplyKeyboardRemove())
     text, markup = await render_role_main_dashboard(session, user)
     await message.answer(text, reply_markup=markup, parse_mode="HTML")

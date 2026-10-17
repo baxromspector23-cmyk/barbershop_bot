@@ -35,6 +35,7 @@ class UserContextMiddleware(BaseMiddleware):
             last_name=tg_user.last_name,
             username=tg_user.username,
         )
+        await session.commit()
 
         # Check blocked user
         if user.is_blocked:

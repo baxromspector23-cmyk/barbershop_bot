@@ -720,7 +720,6 @@ async def handle_walkin_phone(
             btn(
                 text=f"{s.name} — {format_money(s.price)}",
                 callback_data=f"walkin_svc:{s.id}",
-                style="primary",
             )
         ])
     await state.set_state(WalkinSG.waiting_for_service)
@@ -824,12 +823,10 @@ async def handle_barber_services(event: Message | CallbackQuery, session: AsyncS
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
         icon_name = "green" if s.is_active else "red"
-        s_style = "success" if s.is_active else "danger"
         rows.append([
             btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
-                style=s_style,
                 icon=icon_name,
             )
         ])
@@ -840,7 +837,7 @@ async def handle_barber_services(event: Message | CallbackQuery, session: AsyncS
         ])
 
     rows.append([
-        btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", style="primary", icon="home")
+        btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", icon="home")
     ])
 
     title = t("barber.services_title", lang=lang)
@@ -890,12 +887,10 @@ async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user
     for s in services:
         status_icon = "🟢" if s.is_active else "🔴"
         icon_name = "green" if s.is_active else "red"
-        s_style = "success" if s.is_active else "danger"
         rows.append([
             btn(
                 text=f"{status_icon} {s.name} ({format_money(s.price)}, {s.duration_minutes}m)",
                 callback_data=f"toggle_svc:{s.id}",
-                style=s_style,
                 icon=icon_name,
             )
         ])
@@ -904,7 +899,7 @@ async def handle_toggle_service(call: CallbackQuery, session: AsyncSession, user
             btn(text=t("barber.service_add_btn", lang=lang), callback_data="add_svc_prompt", style="success", icon="plus")
         ])
     rows.append([
-        btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", style="primary", icon="home")
+        btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", icon="home")
     ])
     if call.message and hasattr(call.message, "edit_reply_markup"):
         try:

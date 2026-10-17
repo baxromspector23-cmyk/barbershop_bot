@@ -135,16 +135,17 @@ def test_admin_panel_and_owner_buttons_have_organized_colors():
     assert len(admin_btns) == 4
     assert admin_btns[0].style == "primary"  # Login URL
     assert admin_btns[1].style == "success"  # Generate password
-    assert admin_btns[2].style == "primary"  # Set manual password
+    assert admin_btns[2].style is None       # Set manual password (toned down)
     assert admin_btns[3].style == "danger"   # Close
 
     owner_inline = get_owner_inline_menu(is_paused=False, lang="uz")
-    for row in owner_inline.inline_keyboard:
-        for b in row:
-            assert b.style in ("primary", "success", "danger"), f"Button {b.text} missing style"
+    inline_styles = [b.style for row in owner_inline.inline_keyboard for b in row]
+    assert "success" in inline_styles or "primary" in inline_styles
+    assert None in inline_styles  # Secondary buttons are unstyled
 
     owner_reply = get_owner_main_menu(lang="uz")
-    for row in owner_reply.keyboard:
-        for b in row:
-            assert b.style in ("primary", "success", "danger"), f"Reply button {b.text} missing style"
+    reply_styles = [b.style for row in owner_reply.keyboard for b in row]
+    assert "success" in reply_styles
+    assert None in reply_styles  # Secondary buttons are unstyled
+
 
