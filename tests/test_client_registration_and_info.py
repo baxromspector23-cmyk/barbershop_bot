@@ -131,3 +131,82 @@ async def test_owner_info_menu(session_factory):
         cb_barber.answer = AsyncMock()
         await handle_owner_info_menu(cb_barber, session, barber, "uz")
         assert not cb_barber.message.answer.called
+
+
+@pytest.mark.asyncio
+async def test_five_weekly_visits_single_client_history_and_dedup(session_factory, sample_barber):
+    from datetime import date
+    from app.models.enums import OrderStatus
+    from app.repositories.order_repo import OrderRepository
+    from app.repositories.user_repo import UserRepository
+    from app.scheduler.jobs import cleanup_database_bloat
+    from app.utils.time_utils import now_utc
+
+    async with session_factory() as session:
+        user_repo = UserRepository(session)
+        order_repo = OrderRepository(session)
+
+        # Client visits 2 times as a walk-in with phone +998901112233
+        for idx in range(1, 3):
+            w_client, norm_phone = await user_repo.get_or_create_walkin_client(
+                name="Sardor", raw_phone="90 111 22 33"
+            )
+            order = Order(
+                barber_id=sample_barber.id,
+                client_id=w_client.id,
+                walkin_name="Sardor",
+                walkin_phone=norm_phone,
+                service_name="Soch olish",
+                price=50000,
+                duration_minutes=30,
+                status=OrderStatus.COMPLETED.value,
+                position_key=idx * 1000,
+                ticket_no=idx,
+                ticket_date=date(2026, 10, 17),
+                completed_at=now_utc(),
+            )
+            session.add(order)
+        await session.commit()
+
+        # Verify only 1 client row exists in DB
+        assert await user_repo.count_clients() == 1
+
+        # Later, the same client starts the Telegram bot and registers their phone +998901112233
+        tg_user, _ = await user_repo.get_or_create(
+            telegram_id=777888999,
+            first_name="Sardor",
+            last_name="Karimov",
+            username="sardor_k",
+        )
+        await user_repo.update_phone(tg_user.id, "+998901112233")
+        tg_user.phone = "+998901112233"
+        await session.commit()
+
+        # Still strictly 1 client row in DB (walk-in profile merged into Telegram user!)
+        assert await user_repo.count_clients() == 1
+
+        # Client visits 3 more times during the week (total 5 times)
+        for idx in range(3, 6):
+            order = Order(
+                barber_id=sample_barber.id,
+                client_id=tg_user.id,
+                service_name="Soqol tekislash",
+                price=40000,
+                duration_minutes=20,
+                status=OrderStatus.COMPLETED.value,
+                position_key=idx * 1000,
+                ticket_no=idx,
+                ticket_date=date(2026, 10, 17),
+                completed_at=now_utc(),
+            )
+            session.add(order)
+        await session.commit()
+
+        await cleanup_database_bloat(session_factory)
+
+        # Verify still 1 client row and all 5 visits are in their single website history
+        assert await user_repo.count_clients() == 1
+        visit_count, total_spent = await order_repo.get_client_visit_stats(tg_user.id)
+        assert visit_count == 5
+        assert total_spent == 2 * 50000 + 3 * 40000
+

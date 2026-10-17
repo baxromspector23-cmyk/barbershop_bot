@@ -105,12 +105,14 @@ async def handle_start(
 
     # Staff (OWNER and BARBER) go straight to their dashboard
     if user.role in (UserRole.OWNER.value, UserRole.BARBER.value):
+        await state.clear()
         text, markup = await render_role_main_dashboard(session, user)
         await message.answer(text, reply_markup=markup, parse_mode="HTML")
         return
 
-    # If user already registered phone: show profile info and main dashboard
+    # If user already registered phone: clear any state, show profile info and main dashboard
     if user.phone:
+        await state.clear()
         escaped_first = html.escape(user.first_name or "")
         escaped_last = html.escape(user.last_name or "")
         escaped_phone = html.escape(user.phone or "")

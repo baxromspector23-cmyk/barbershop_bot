@@ -226,8 +226,8 @@ class QueueService:
             if not barber:
                 raise QueueException(f"Barber #{barber_id} not found")
 
-            # Check client active order
-            if client:
+            # Check client active order (for self-service bot clients)
+            if client and not walkin_name:
                 active_existing = await self.order_repo.get_active_order_for_client(client.id)
                 if active_existing:
                     raise AlreadyInQueueError("Client already has an active order")

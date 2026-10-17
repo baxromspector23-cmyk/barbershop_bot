@@ -71,8 +71,35 @@ async def setup_bot_commands(bot: Bot) -> None:
         logger.warning("Failed to configure bot commands or menu button: %s", exc)
 
 
+async def ensure_database_schema() -> None:
+    from sqlalchemy import text
+
+    import app.models  # noqa: F401
+    from app.db.base import Base
+    from app.db.session import engine
+
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception as exc:
+        logger.warning("Failed to run create_all on startup: %s", exc)
+
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE barbers ADD COLUMN IF NOT EXISTS photo_file_id VARCHAR(255)"))
+    except Exception:
+        pass
+
+    try:
+        from app.scheduler.jobs import cleanup_database_bloat
+        await cleanup_database_bloat(async_session_maker)
+    except Exception as exc:
+        logger.debug("Initial DB cleanup note: %s", exc)
+
+
 async def main():
     settings.validate_runtime()
+    await ensure_database_schema()
     bot = Bot(token=settings.BOT_TOKEN)
     await setup_bot_commands(bot)
     dp = build_dispatcher()

@@ -61,6 +61,10 @@ def create_app_engine():
             raise RuntimeError(f"PostgreSQL connection failed in production: {e}") from e
 
     # In dev or test environments:
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     try:
         return create_async_engine(url, **get_engine_args(url))
     except (ModuleNotFoundError, Exception) as e:

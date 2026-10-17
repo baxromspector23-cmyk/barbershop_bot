@@ -70,7 +70,108 @@ class UserRepository:
         )
         await self.session.execute(stmt)
 
+    async def get_client_by_phone(self, phone: str, exclude_user_id: int | None = None) -> User | None:
+        from sqlalchemy import func
+
+        digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+        if len(digits) < 9:
+            return None
+        tail9 = digits[-9:]
+        norm_phone = func.coalesce(User.phone, "")
+        for ch in (" ", "-", "+", "(", ")", "."):
+            norm_phone = func.replace(norm_phone, ch, "")
+        stmt = select(User).where(
+            User.role == UserRole.CLIENT.value,
+            norm_phone.like(f"%{tail9}"),
+        )
+        if exclude_user_id is not None:
+            stmt = stmt.where(User.id != exclude_user_id)
+        stmt = stmt.order_by(User.telegram_id.desc(), User.id.asc())
+        res = await self.session.execute(stmt)
+        return res.scalars().first()
+
+    async def get_or_create_walkin_client(
+        self,
+        name: str,
+        raw_phone: str | None,
+        language: str = Language.UZ.value,
+    ) -> tuple[User | None, str]:
+        from app.utils.phone import normalize_uz_phone
+
+        cleaned_raw = (raw_phone or "").strip()
+        if not cleaned_raw:
+            return None, ""
+
+        norm = normalize_uz_phone(cleaned_raw) or cleaned_raw
+        digits = "".join(ch for ch in norm if ch.isdigit())
+        if len(digits) < 9:
+            return None, cleaned_raw
+
+        existing = await self.get_client_by_phone(norm)
+        if existing:
+            if name and (not existing.first_name or existing.first_name == "Mijoz"):
+                existing.first_name = name
+                existing.updated_at = now_utc()
+            return existing, existing.phone or norm
+
+        synthetic_tg_id = -int(digits[-12:])
+        by_tg = await self.get_by_telegram_id(synthetic_tg_id)
+        if by_tg:
+            if not by_tg.phone:
+                by_tg.phone = norm
+            return by_tg, norm
+
+        walkin_user = User(
+            telegram_id=synthetic_tg_id,
+            username=None,
+            first_name=name or "Mijoz",
+            last_name=None,
+            phone=norm,
+            language=language,
+            role=UserRole.CLIENT.value,
+            is_blocked=False,
+            bot_blocked=False,
+        )
+        self.session.add(walkin_user)
+        await self.session.flush()
+        return walkin_user, norm
+
     async def update_phone(self, user_id: int, phone: str) -> None:
+        from sqlalchemy import delete as sa_delete, func
+        from app.models.order import Order
+        from app.models.payment import Payment
+
+        digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+        if len(digits) >= 9:
+            tail9 = digits[-9:]
+            norm_col = func.coalesce(User.phone, "")
+            for ch in (" ", "-", "+", "(", ")", "."):
+                norm_col = func.replace(norm_col, ch, "")
+            dup_stmt = select(User).where(
+                User.id != user_id,
+                User.role == UserRole.CLIENT.value,
+                norm_col.like(f"%{tail9}"),
+            )
+            dup_res = await self.session.execute(dup_stmt)
+            duplicates = list(dup_res.scalars().all())
+            for dup in duplicates:
+                await self.session.execute(
+                    update(Order).where(Order.client_id == dup.id).values(client_id=user_id)
+                )
+                await self.session.execute(
+                    update(Payment).where(Payment.client_id == dup.id).values(client_id=user_id)
+                )
+                await self.session.execute(sa_delete(User).where(User.id == dup.id))
+
+            walkin_norm = func.coalesce(Order.walkin_phone, "")
+            for ch in (" ", "-", "+", "(", ")", "."):
+                walkin_norm = func.replace(walkin_norm, ch, "")
+            await self.session.execute(
+                update(Order)
+                .where(Order.client_id.is_(None), walkin_norm.like(f"%{tail9}"))
+                .values(client_id=user_id)
+            )
+
         stmt = (
             update(User)
             .where(User.id == user_id)

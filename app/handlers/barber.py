@@ -763,13 +763,20 @@ async def handle_walkin_service(
 
     acting_barber_id = service.barber_id if user.role == UserRole.OWNER.value else barber.id
 
+    user_repo = UserRepository(session)
+    walkin_client, normalized_walkin_phone = await user_repo.get_or_create_walkin_client(
+        name=walkin_name,
+        raw_phone=walkin_phone,
+        language=lang,
+    )
+
     qs = QueueService(session, notifier=NotificationService(bot=bot))
     order = await qs.join_queue(
         barber_id=acting_barber_id,
         service_id=svc_id,
-        client=None,
+        client=walkin_client,
         walkin_name=walkin_name,
-        walkin_phone=walkin_phone,
+        walkin_phone=normalized_walkin_phone or walkin_phone,
         pay_now=False,
         enforce_capacity=False,  # the barber is physically present and decides who he takes
     )
