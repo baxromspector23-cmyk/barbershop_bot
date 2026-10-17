@@ -668,6 +668,20 @@ def _parse_offset(raw: str | None) -> int:
     return max(-120, min(120, val))
 
 
+_PASSWORD_HASH_KEY = web.AppKey("password_hash", str)
+_current_site_app: web.Application | None = None
+
+
+def get_current_site_app() -> web.Application | None:
+    return _current_site_app
+
+
+def set_current_site_password_hash(new_hash: str) -> None:
+    global _current_site_app
+    if _current_site_app is not None:
+        _current_site_app[_PASSWORD_HASH_KEY] = new_hash
+
+
 def create_site_app(
     session_factory: Any,
     *,
@@ -882,7 +896,8 @@ def create_site_app(
 
         # Always run both checks to avoid timing leaks
         user_ok = hmac.compare_digest(sub_user.encode("utf-8"), expected_username_bytes)
-        pass_ok = verify_password(sub_pass, password_hash)
+        active_hash = request.app.get(_PASSWORD_HASH_KEY, password_hash)
+        pass_ok = verify_password(sub_pass, active_hash)
 
         if not (user_ok and pass_ok):
             ip_failures.setdefault(ip, []).append(current_time)
@@ -1206,7 +1221,10 @@ def create_site_app(
         html_doc = _page_shell(f"Mijoz — {full_name}", body, logout_csrf=_make_csrf(session_token), active_tab="clients")
         return web.Response(text=html_doc, status=200, content_type="text/html", charset="utf-8")
 
+    global _current_site_app
     app = web.Application(middlewares=[security_headers_middleware])
+    app[_PASSWORD_HASH_KEY] = password_hash
+    _current_site_app = app
     app.router.add_get("/login", handle_login_get)
     app.router.add_post("/login", handle_login_post)
     app.router.add_post("/logout", handle_logout_post)

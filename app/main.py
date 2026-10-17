@@ -63,6 +63,7 @@ async def setup_bot_commands(bot: Bot) -> None:
         await bot.set_my_commands([
             BotCommand(command="start", description="Botni ishga tushirish / Перезапустить"),
             BotCommand(command="menu", description="Boshqaruv menyusi / Главное меню"),
+            BotCommand(command="admin", description="Katta barber sayt boshqaruvi"),
         ])
         await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
         logger.info("Bot commands and menu button configured successfully")

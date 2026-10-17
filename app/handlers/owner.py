@@ -4,11 +4,13 @@ import re
 from datetime import time
 
 from aiogram import Bot, F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
     BufferedInputFile,
     CallbackQuery,
+    InlineKeyboardButton,
     InlineKeyboardMarkup,
     Message,
 )
@@ -31,6 +33,11 @@ from app.repositories.user_repo import UserRepository
 from app.services.payment_service import PaymentService
 from app.services.queue_service import QueueService
 from app.services.report_service import ReportService
+from app.services.site_admin_service import (
+    apply_new_site_password,
+    generate_secure_password,
+    get_current_password_display,
+)
 from app.services.user_service import UserService
 from app.utils.formatting import format_money
 from app.utils.time_utils import get_day_bounds_utc, get_week_bounds_utc, tashkent_today
@@ -41,6 +48,10 @@ router = Router(name="owner_router")
 
 class BlockUserSG(StatesGroup):
     waiting_for_query = State()
+
+
+class AdminSiteSG(StatesGroup):
+    waiting_for_new_site_password = State()
 
 
 class EditScheduleSG(StatesGroup):
@@ -961,3 +972,202 @@ async def handle_block_query(
         await message.answer(t("owner.client_blocked_msg", lang=lang, nick=nick))
     else:
         await message.answer(t("owner.client_unblocked_msg", lang=lang, nick=nick))
+
+
+# -------------------------------------------------------------
+# Katta Barber: /admin Website & Credentials Management
+# -------------------------------------------------------------
+def get_admin_panel_content() -> tuple[str, InlineKeyboardMarkup]:
+    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}/login"
+    login_user = settings.SITE_USERNAME
+    cur_pwd = get_current_password_display()
+
+    text = (
+        "👑 <b>KATTA BARBER — SAYT BOSHQARUV PANELI</b>\n\n"
+        f"🌐 <b>Sayt manzili (URL):</b>\n<code>{site_url}</code>\n\n"
+        f"👤 <b>Login:</b> <code>{login_user}</code>\n"
+        f"🔑 <b>Joriy parol:</b> <code>{cur_pwd}</code>\n\n"
+        "💡 <i>Saytda barcha mijozlar bazasi, telefon raqamlari va to'lov kvitansiyalari mavjud.\n\n"
+        "Agar parolni unutgan bo'lsangiz yoki yangilamoqchi bo'lsangiz, quyidagi tugmalardan birini bosing:</i>"
+    )
+
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🌐 Saytga o'tish (Login)", url=site_url)],
+            [
+                InlineKeyboardButton(
+                    text="🔄 Yangi parol generatsiya qilish",
+                    callback_data="admin_site:gen_pwd",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="✏️ O'zim yangi parol yozaman",
+                    callback_data="admin_site:set_pwd",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="❌ Yopish",
+                    callback_data="admin_site:close",
+                ),
+            ],
+        ]
+    )
+    return text, kb
+
+
+@router.message(Command("admin"))
+async def handle_admin_command(message: Message, user: User, lang: str):
+    if not (is_owner(user) or (message.from_user and message.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        await message.answer("⛔ Kechirasiz, bu buyruq faqat katta barber (rahbar) uchun mo'ljallangan.")
+        return
+
+    text, kb = get_admin_panel_content()
+    await message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+
+
+@router.callback_query(F.data == "admin_site:panel")
+async def handle_admin_panel_return(call: CallbackQuery, user: User):
+    if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        await call.answer("Ruxsat berilmagan!", show_alert=True)
+        return
+
+    text, kb = get_admin_panel_content()
+    try:
+        await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+    except Exception:
+        await call.message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+    await call.answer()
+
+
+@router.callback_query(F.data == "admin_site:close")
+async def handle_admin_panel_close(call: CallbackQuery, user: User):
+    if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        await call.answer()
+        return
+
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.answer()
+
+
+@router.callback_query(F.data == "admin_site:cancel")
+async def handle_admin_panel_cancel(call: CallbackQuery, state: FSMContext, user: User):
+    if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        await call.answer()
+        return
+
+    await state.clear()
+    text, kb = get_admin_panel_content()
+    try:
+        await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+    except Exception:
+        await call.message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+    await call.answer("Bekor qilindi")
+
+
+@router.callback_query(F.data == "admin_site:gen_pwd")
+async def handle_admin_generate_password(call: CallbackQuery, user: User):
+    if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        await call.answer("Ruxsat berilmagan!", show_alert=True)
+        return
+
+    new_pwd = generate_secure_password()
+    ok, msg = await apply_new_site_password(new_pwd)
+    if not ok:
+        await call.answer(f"Xatolik: {msg}", show_alert=True)
+        return
+
+    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}/login"
+    text = (
+        "✅ <b>Yangi sayt paroli muvaffaqiyatli yaratildi va o'rnatildi!</b>\n\n"
+        f"🌐 <b>Sayt manzili:</b> <code>{site_url}</code>\n"
+        f"👤 <b>Login:</b> <code>{settings.SITE_USERNAME}</code>\n"
+        f"🔑 <b>Yangi parol:</b> <code>{new_pwd}</code>\n\n"
+        "⚠️ <b>Muhim:</b> <i>Ushbu parolni nusxalab oling (ustiga bossangiz nusxalanadi). Yangi parol darhol saytda va serverda faollashdi!</i>"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🌐 Saytni ochish", url=site_url)],
+            [InlineKeyboardButton(text="🔙 Boshqaruv paneliga qaytish", callback_data="admin_site:panel")],
+        ]
+    )
+    try:
+        await call.message.edit_text(text, reply_markup=kb, disable_web_page_preview=True)
+    except Exception:
+        await call.message.answer(text, reply_markup=kb, disable_web_page_preview=True)
+    await call.answer("Yangi parol o'rnatildi!", show_alert=True)
+
+
+@router.callback_query(F.data == "admin_site:set_pwd")
+async def handle_admin_set_password_prompt(call: CallbackQuery, state: FSMContext, user: User):
+    if not (is_owner(user) or (call.from_user and call.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        await call.answer("Ruxsat berilmagan!", show_alert=True)
+        return
+
+    await state.set_state(AdminSiteSG.waiting_for_new_site_password)
+    text = (
+        "✏️ <b>Yangi sayt parolini yozib yuboring:</b>\n\n"
+        "<i>Talablar: kamida 8 ta belgidan iborat bo'lsin.</i>\n\n"
+        "🔒 <b>Xavfsizlik kafolati:</b> Siz yozgan xabar bot tomonidan darhol o'chirib yuboriladi, chat tarixida qolmaydi."
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="admin_site:cancel")],
+        ]
+    )
+    try:
+        await call.message.edit_text(text, reply_markup=kb)
+    except Exception:
+        await call.message.answer(text, reply_markup=kb)
+    await call.answer()
+
+
+@router.message(AdminSiteSG.waiting_for_new_site_password)
+async def handle_admin_receive_new_password(message: Message, state: FSMContext, user: User):
+    if not (is_owner(user) or (message.from_user and message.from_user.id in settings.OWNER_TELEGRAM_IDS)):
+        return
+
+    # Delete owner message immediately so password is never retained in Telegram chat
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    new_pwd = (message.text or "").strip()
+    if len(new_pwd) < 8:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Bekor qilish", callback_data="admin_site:cancel")],
+            ]
+        )
+        await message.answer(
+            "⚠️ <b>Parol juda qisqa!</b> Kamida 8 ta belgidan iborat bo'lishi kerak.\nQaytadan kiriting:",
+            reply_markup=kb,
+        )
+        return
+
+    ok, msg = await apply_new_site_password(new_pwd)
+    if not ok:
+        await message.answer(f"❌ Xatolik yuz berdi: {msg}")
+        return
+
+    await state.clear()
+    site_url = f"{settings.SITE_BASE_URL.rstrip('/')}/login"
+    text = (
+        "✅ <b>Yangi sayt paroli muvaffaqiyatli qabul qilindi va o'rnatildi!</b>\n\n"
+        f"🌐 <b>Sayt manzili:</b> <code>{site_url}</code>\n"
+        f"👤 <b>Login:</b> <code>{settings.SITE_USERNAME}</code>\n"
+        f"🔑 <b>O'rnatilgan yangi parol:</b> <code>{new_pwd}</code>\n\n"
+        "⚠️ <i>Parol saytda va serverda faollashtirildi. Xavfsiz joyga saqlab qo'ying!</i>"
+    )
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🌐 Saytga o'tish", url=site_url)],
+            [InlineKeyboardButton(text="👑 Boshqaruv paneli", callback_data="admin_site:panel")],
+        ]
+    )
+    await message.answer(text, reply_markup=kb, disable_web_page_preview=True)

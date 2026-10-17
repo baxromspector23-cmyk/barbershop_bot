@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     SITE_SECURE_COOKIES: bool = True
     SITE_TRUST_PROXY: bool = False
     SITE_PORT: int = 8081
+    SITE_BASE_URL: str = "https://barbershop-bot-site.onrender.com"
+    RENDER_API_KEY: str | None = None
+    RENDER_SERVICE_ID: str | None = None
 
     @field_validator("INSTAGRAM_URL")
     @classmethod
