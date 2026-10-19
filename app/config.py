@@ -96,6 +96,8 @@ class Settings(BaseSettings):
     SITE_BASE_URL: str = "https://barbershop-bot-site.onrender.com"
     RENDER_API_KEY: str | None = None
     RENDER_SERVICE_ID: str | None = None
+    GEMINI_API_KEY: str | None = None
+    GEMINI_IMAGE_MODEL: str = "gemini-2.5-flash-image"
 
     @field_validator("INSTAGRAM_URL")
     @classmethod

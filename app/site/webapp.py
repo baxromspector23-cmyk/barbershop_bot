@@ -7,6 +7,8 @@ from typing import Any
 import aiohttp
 from aiohttp import web
 
+from app.config import settings
+
 logger = logging.getLogger("barbershop_bot.webapp")
 
 WEBAPP_SECURITY_HEADERS = {
@@ -27,7 +29,7 @@ WEBAPP_SECURITY_HEADERS = {
     ),
 }
 
-# Detailed catalog of men's hairstyles with real HD studio reference portraits
+# Detailed catalog of men's hairstyles with real HD studio reference portraits and Nano Banana prompts
 HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
     {
         "id": "low_fade_crop",
@@ -37,7 +39,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yon tomonlari pastdan silliq o'tish (Low Fade) va tepasi teksturali zamonaviy turmak.",
         "best_shapes": ["oval", "square", "diamond", "round"],
         "photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&auto=format&fit=crop&q=85",
-        "prompt": "modern men low fade textured french crop haircut, sharp hairline, barbershop studio quality",
+        "prompt": "modern men's low skin fade with a textured French crop top and sharp natural hairline",
     },
     {
         "id": "high_skin_fade_quiff",
@@ -47,7 +49,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yonlari nolga yaqin baland fade, old qismi ko'tarilgan hajmli Quiff uslubi.",
         "best_shapes": ["round", "oval", "square"],
         "photo_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men high skin fade textured quiff hairstyle, volumetric top, clean fade sides",
+        "prompt": "men's high skin fade with a volumetric textured quiff on top, clean barbershop fade",
     },
     {
         "id": "classic_side_part",
@@ -57,7 +59,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yonga taralgan an'anaviy, tartibli va har qanday kiyimga mos tushuvchi klassik stil.",
         "best_shapes": ["oval", "square", "oblong", "diamond"],
         "photo_url": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men classic gentleman side part taper fade haircut, neat combed hair, executive look",
+        "prompt": "classic gentleman side part haircut with neat combed hair and clean taper fade sides",
     },
     {
         "id": "modern_pompadour",
@@ -67,7 +69,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Tepa qismi orqaga va yuqoriga silliq taralgan, yuzni uzunroq va chiroyli ko'rsatuvchi turmak.",
         "best_shapes": ["round", "oval", "square"],
         "photo_url": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men modern pompadour mid fade haircut, slick volumetric top",
+        "prompt": "modern men's pompadour haircut with slick brushed-back volumetric top and mid fade",
     },
     {
         "id": "buzz_cut_fade",
@@ -77,7 +79,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Kalta, parvarishi oson, jag' chiziqlarini keskin va erkakcha ko'rsatuvchi harbiy-sport uslubi.",
         "best_shapes": ["square", "oval", "diamond"],
         "photo_url": "https://images.unsplash.com/photo-1463453091185-61582044d556?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men buzz cut with mid drop skin fade and sharp line up",
+        "prompt": "ultra-clean men's buzz cut with a mid drop skin fade and sharp forehead line-up",
     },
     {
         "id": "undercut_slick",
@@ -87,7 +89,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yonlari kalta va tepasi uzun kontrastli zamonaviy yoshlar uslubi.",
         "best_shapes": ["oval", "round", "diamond"],
         "photo_url": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men disconnected undercut slick back textured hair",
+        "prompt": "men's disconnected undercut with short faded sides and slick textured longer top",
     },
     {
         "id": "french_crop",
@@ -97,7 +99,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Peshona qismi tekis chiziqli va tepasi qalin teksturali zamonaviy Yevropa uslubi.",
         "best_shapes": ["oblong", "oval", "diamond", "square"],
         "photo_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men sharp french crop haircut with mid taper fade",
+        "prompt": "men's sharp French crop haircut with forward textured fringe and mid taper fade",
     },
     {
         "id": "curly_taper",
@@ -107,7 +109,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Jingalak yoki to'lqinli sochlar uchun tabiiy hajm va toza yon fade uyg'unligi.",
         "best_shapes": ["oval", "oblong", "diamond", "round"],
         "photo_url": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men curly wavy top haircut with clean drop fade",
+        "prompt": "men's natural curly wavy top haircut with a clean barbershop drop fade on the sides",
     },
     {
         "id": "modern_mullet",
@@ -117,7 +119,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Quloq atrofi yarim oy (Burst fade) va orqa qismi teksturali zamonaviy trend.",
         "best_shapes": ["oval", "diamond", "square"],
         "photo_url": "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men modern burst fade textured mullet haircut",
+        "prompt": "modern men's burst fade mullet haircut with textured top and clean faded temples",
     },
     {
         "id": "textured_fringe",
@@ -127,101 +129,122 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Oldinga tushib turuvchi erkin, yengil va peshonani yopuvchi teksturali uslub.",
         "best_shapes": ["oblong", "diamond", "oval"],
         "photo_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men textured messy fringe haircut with low taper",
+        "prompt": "men's messy textured fringe haircut with low taper fade",
     },
 ]
 
 BEARD_CATALOG: list[dict[str, Any]] = [
-    {"id": "none", "name_uz": "Soqolsiz (Toza)", "name_ru": "Без бороды"},
-    {"id": "stubble", "name_uz": "Yengil soqol (Stubble)", "name_ru": "Лёгкая щетина"},
-    {"id": "fade_beard", "name_uz": "Fade Soqol (Konturli)", "name_ru": "Фейд борода с контуром"},
-    {"id": "full_beard", "name_uz": "Qalin To'liq Soqol", "name_ru": "Полная густая борода"},
-    {"id": "goatee", "name_uz": "Goatee (Espanyolka)", "name_ru": "Эспаньолка (Goatee)"},
+    {"id": "fade_beard", "name_uz": "Fade Soqol (Konturli)", "name_ru": "Фейд борода с контуром", "prompt": "neatly lined-up faded beard"},
+    {"id": "stubble", "name_uz": "Yengil soqol (Stubble)", "name_ru": "Лёгкая щетина", "prompt": "light 3-day designer stubble beard"},
+    {"id": "full_beard", "name_uz": "Qalin To'liq Soqol", "name_ru": "Полная густая борода", "prompt": "well-groomed full thick masculine beard"},
+    {"id": "goatee", "name_uz": "Goatee (Espanyolka)", "name_ru": "Эспаньолка (Goatee)", "prompt": "stylish goatee and mustache"},
+    {"id": "none", "name_uz": "Soqolsiz (Toza)", "name_ru": "Без бороды", "prompt": "clean-shaven face"},
 ]
 
+COLOR_PROMPTS: dict[str, str] = {
+    "natural_black": "natural jet black hair color",
+    "dark_brown": "rich dark espresso brown hair color",
+    "warm_chestnut": "warm chestnut medium brown hair color",
+    "ash_graphite": "modern silver ash grey platinum hair color",
+}
 
-async def _call_optional_cloud_ai(
+
+async def _call_nano_banana_image_edit(
     image_b64: str,
     style_obj: dict[str, Any],
     beard_obj: dict[str, Any],
     hair_color: str,
     face_shape: str,
 ) -> dict[str, Any] | None:
-    gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-    openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    """
+    Calls Google Gemini 'Nano Banana' (gemini-2.5-flash-image / gemini-2.0-flash-exp-image-generation)
+    to photorealistically edit ONLY the hairstyle and beard on the client's real face photo
+    while keeping their exact facial identity, skin tone, eyes, and background 100% intact.
+    """
+    gemini_key = (settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY") or "").strip()
+    if not gemini_key or not image_b64:
+        return None
 
-    if gemini_key:
-        try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
-            raw_b64 = image_b64.split(",", 1)[-1] if "," in image_b64 else image_b64
+    mime_type = "image/jpeg"
+    if image_b64.startswith("data:") and ";base64," in image_b64:
+        header, raw_b64 = image_b64.split(";base64,", 1)
+        mime_type = header.replace("data:", "").strip() or "image/jpeg"
+    else:
+        raw_b64 = image_b64
+
+    color_desc = COLOR_PROMPTS.get(hair_color, "natural black hair color")
+    beard_desc = beard_obj.get("prompt", "neatly trimmed beard")
+    edit_instruction = (
+        f"Edit this person's photo in photorealistic 8k barbershop quality: "
+        f"Change ONLY their hairstyle to a {style_obj['prompt']} with {color_desc}, "
+        f"and set facial hair to {beard_desc}. "
+        f"CRITICAL: Preserve the exact same person's face, eyes, nose, skin tone, facial expression, "
+        f"head angle, clothing, and background 100% unchanged. Make the new hair blend naturally into the scalp and temples."
+    )
+
+    # Try Nano Banana image generation models in priority order
+    candidate_models = [
+        settings.GEMINI_IMAGE_MODEL or "gemini-2.5-flash-image",
+        "gemini-2.5-flash-image-preview",
+        "gemini-2.0-flash-exp-image-generation",
+    ]
+    seen = set()
+    models_to_try = [m for m in candidate_models if not (m in seen or seen.add(m))]
+
+    timeout = aiohttp.ClientTimeout(total=35)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        for model_name in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
             payload = {
                 "contents": [
                     {
                         "parts": [
+                            {"text": edit_instruction},
                             {
-                                "text": (
-                                    f"Sen professional sartarosh-stilistsan. Mijozning yuz shakli: {face_shape}. "
-                                    f"Tanlangan soch turmagi: {style_obj['name_uz']}, soqol: {beard_obj['name_uz']}, "
-                                    f"rang: {hair_color}. Shu mijozning yuz tuzilishiga mos 2-3 jumlalik aniq, "
-                                    "qisqa va foydali o'zbek tilidagi tavsiya yozib ber."
-                                )
-                            },
-                            {
-                                "inline_data": {
-                                    "mime_type": "image/jpeg",
-                                    "data": raw_b64[:400000],
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": raw_b64,
                                 }
                             },
                         ]
                     }
-                ]
-            }
-            timeout = aiohttp.ClientTimeout(total=8)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, json=payload) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        candidates = data.get("candidates") or []
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts", [])
-                            if parts and "text" in parts[0]:
-                                return {"ai_advice": parts[0]["text"].strip(), "engine": "gemini"}
-        except Exception as exc:
-            logger.debug("Optional Gemini API call skipped: %s", exc)
-
-    if openai_key:
-        try:
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"}
-            payload = {
-                "model": "gpt-4o-mini",
-                "messages": [
-                    {
-                        "role": "system",
-                        "content": "Sen professional barbershop AI stilistisan. O'zbek tilida qisqa (2-3 gap) tavsiya ber.",
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Yuz shakli: {face_shape}. Soch: {style_obj['name_uz']}. "
-                            f"Soqol: {beard_obj['name_uz']}. Rang: {hair_color}."
-                        ),
-                    },
                 ],
-                "max_tokens": 160,
+                "generationConfig": {
+                    "responseModalities": ["TEXT", "IMAGE"],
+                },
             }
-            timeout = aiohttp.ClientTimeout(total=8)
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.post(url, headers=headers, json=payload) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        choices = data.get("choices") or []
-                        if choices:
-                            txt = choices[0].get("message", {}).get("content", "").strip()
-                            if txt:
-                                return {"ai_advice": txt, "engine": "openai"}
-        except Exception as exc:
-            logger.debug("Optional OpenAI API call skipped: %s", exc)
+            try:
+                async with session.post(url, json=payload) as resp:
+                    if resp.status != 200:
+                        err_txt = await resp.text()
+                        logger.warning("NanoBanana model %s returned %s: %s", model_name, resp.status, err_txt[:250])
+                        continue
+                    data = await resp.json()
+                    candidates = data.get("candidates") or []
+                    if not candidates:
+                        continue
+                    parts = candidates[0].get("content", {}).get("parts") or []
+                    generated_img_b64 = None
+                    generated_mime = "image/png"
+                    ai_text = None
+                    for p in parts:
+                        inline = p.get("inlineData") or p.get("inline_data")
+                        if inline and inline.get("data"):
+                            generated_img_b64 = inline["data"]
+                            generated_mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                        elif p.get("text"):
+                            ai_text = p["text"].strip()
+
+                    if generated_img_b64:
+                        res: dict[str, Any] = {
+                            "generated_image": f"data:{generated_mime};base64,{generated_img_b64}",
+                            "engine": f"nano_banana ({model_name})",
+                        }
+                        if ai_text:
+                            res["ai_advice"] = ai_text
+                        return res
+            except Exception as exc:
+                logger.warning("NanoBanana call failed on %s: %s", model_name, exc)
 
     return None
 
@@ -255,15 +278,18 @@ def _build_smart_stylist_advice(
         s["id"] for s in HAIRSTYLES_CATALOG if face_shape in s.get("best_shapes", [])
     ][:4]
 
+    has_key = bool((settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY") or "").strip())
+
     advice = (
         f"✨ Sizning yuz tuzilishingiz — {shape_title}. "
         f"«{style_obj['name_uz']}» turmagi va «{beard_obj['name_uz']}» uyg'unligi yuz proporsiyasini "
         f"{match_score}% aniqlikda ochib beradi. {style_obj['desc_uz']} "
-        f"Tanlangan tus: {color_label} — sartaroshga ushbu jonli namunani ko'rsatib xuddi shunday qirqishni so'rashingiz mumkin!"
+        f"Tanlangan tus: {color_label}."
     )
 
     return {
         "ok": True,
+        "nano_banana_ready": has_key,
         "face_shape": face_shape,
         "face_shape_title": shape_title,
         "match_score": match_score,
@@ -274,7 +300,7 @@ def _build_smart_stylist_advice(
         "hair_color": color_label,
         "recommended_styles": recommended_styles,
         "ai_advice": advice,
-        "engine": "mediapipe_photorealistic_ai",
+        "engine": "nano_banana_ready" if has_key else "mediapipe_hd",
     }
 
 
@@ -296,9 +322,9 @@ async def handle_webapp_generate(request: web.Request) -> web.Response:
     result = _build_smart_stylist_advice(style_obj, beard_obj, face_shape, hair_color)
 
     if image_b64:
-        cloud_res = await _call_optional_cloud_ai(image_b64, style_obj, beard_obj, hair_color, face_shape)
-        if cloud_res:
-            result.update(cloud_res)
+        nano_res = await _call_nano_banana_image_edit(image_b64, style_obj, beard_obj, hair_color, face_shape)
+        if nano_res:
+            result.update(nano_res)
 
     return web.json_response(result)
 
@@ -453,6 +479,31 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     video#cameraVideo {
       transform: scaleX(-1);
     }
+    .ai-loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(8, 10, 15, 0.82);
+      backdrop-filter: blur(8px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      text-align: center;
+      padding: 20px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .spinner {
+      width: 46px;
+      height: 46px;
+      border: 3.5px solid rgba(212,175,55,0.25);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      margin-bottom: 12px;
+    }
     .face-guide-overlay {
       position: absolute;
       inset: 0;
@@ -564,38 +615,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       font-weight: 700;
       cursor: pointer;
       user-select: none;
-    }
-
-    /* Fine-tune adjustment bar */
-    .adjust-bar {
-      display: none;
-      margin-top: 9px;
-      padding-top: 9px;
-      border-top: 1px solid rgba(255,255,255,0.08);
-      gap: 8px;
-      align-items: center;
-      justify-content: space-between;
-      flex-wrap: wrap;
-    }
-    .adjust-group {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 11.5px;
-      color: var(--muted);
-    }
-    .mini-ctrl {
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.09);
-      border: 1px solid rgba(255,255,255,0.16);
-      color: #fff;
-      font-weight: 700;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
     }
 
     /* 4 Variants Real Photo Grid */
@@ -829,20 +848,20 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
   <div class="wrap">
     <div class="top-header">
       <div class="brand-left">
-        <div class="logo-circle">💈</div>
+        <div class="logo-circle">🍌</div>
         <div>
-          <div class="brand-title">JASUR BARBER AI</div>
-          <div class="brand-sub">Jonli HD Fotorealistik Soch &amp; Soqol Tanlash</div>
+          <div class="brand-title">JASUR BARBER • NANO BANANA AI</div>
+          <div class="brand-sub">Gemini Pro / Nano Banana Jonli Soch Generatori</div>
         </div>
       </div>
-      <span class="ai-badge" id="aiStatusBadge">✨ HD REAL</span>
+      <span class="ai-badge" id="aiStatusBadge">✨ NANO BANANA</span>
     </div>
 
-    <!-- 3 View Modes for realistic experience -->
+    <!-- 3 View Modes -->
     <div class="mode-tabs">
-      <button type="button" class="mode-tab active" data-mode="split">🔀 Yuzim + Jonli Stil</button>
-      <button type="button" class="mode-tab" data-mode="blend">🪄 Yuzimga Kiygizish</button>
-      <button type="button" class="mode-tab" data-mode="model">📸 4K Jonli Model</button>
+      <button type="button" class="mode-tab" data-mode="nanobanana">🍌 Nano Banana AI</button>
+      <button type="button" class="mode-tab" data-mode="split">🔀 Yuzim + Jonli Stil</button>
+      <button type="button" class="mode-tab active" data-mode="model">📸 4K Jonli Model</button>
     </div>
 
     <!-- Main Camera / Photo Viewport -->
@@ -850,6 +869,12 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       <div class="viewport-box" id="viewportBox">
         <video id="cameraVideo" autoplay playsinline muted></video>
         <canvas id="mainCanvas" width="720" height="864" style="display:block;"></canvas>
+
+        <div class="ai-loading-overlay" id="aiLoadingOverlay">
+          <div class="spinner"></div>
+          <div style="font-weight:800; color:var(--gold-light); font-size:15px;">🍌 Gemini Nano Banana AI ishlamoqda...</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:5px;">Yuzingizni o'zgartirmasdan tanlangan soch va soqolni fotorealistik chizmoqda (3–6 soniya)</div>
+        </div>
 
         <div class="canvas-top-badges" id="canvasBadges">
           <span class="pill-badge" id="faceShapeBadge">🧠 Yuz: Oval</span>
@@ -866,7 +891,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
       <!-- Camera Active Shutter Controls -->
       <div class="action-strip" id="cameraControls" style="display:none;">
-        <button type="button" class="btn btn-gold" id="capturePhotoBtn" style="flex:1;">📸 Suratga olish va AI tahlil</button>
+        <button type="button" class="btn btn-gold" id="capturePhotoBtn" style="flex:1;">📸 Suratga olish va Nano Banana AI</button>
         <button type="button" class="btn btn-dark" id="cancelCameraBtn">✖ Bekor</button>
       </div>
 
@@ -875,21 +900,9 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         <div style="display:flex; gap:7px; flex-wrap:wrap;">
           <button type="button" class="btn btn-gold btn-sm" id="startCameraBtn">📷 Kamera (Selfi)</button>
           <label for="fileInput" class="btn btn-dark btn-sm" style="cursor:pointer;">🖼 Galereyadan rasm</label>
+          <button type="button" class="btn btn-gold btn-sm" id="runNanoBananaBtn" style="display:none;">🍌 AI Sochni Kiygizish</button>
         </div>
-        <button type="button" class="btn btn-dark btn-sm" id="downloadBtn">📥 Rasmni saqlash</button>
-      </div>
-
-      <!-- Fine adjustment controls when user photo is loaded in blend mode -->
-      <div class="adjust-bar" id="adjustBar">
-        <div class="adjust-group">
-          <span>Sochni moslash:</span>
-          <button type="button" class="mini-ctrl" data-adj="up" title="Yuqoriga">↑</button>
-          <button type="button" class="mini-ctrl" data-adj="down" title="Pastga">↓</button>
-          <button type="button" class="mini-ctrl" data-adj="left" title="Chapga">←</button>
-          <button type="button" class="mini-ctrl" data-adj="right" title="O'ngga">→</button>
-          <button type="button" class="mini-ctrl" data-adj="smaller" title="Kichraytirish">−</button>
-          <button type="button" class="mini-ctrl" data-adj="larger" title="Kattalashtirish">+</button>
-        </div>
+        <button type="button" class="btn btn-dark btn-sm" id="downloadBtn">📥 Saqlash</button>
       </div>
 
       <input type="file" id="fileInput" accept="image/*" style="display:none;">
@@ -906,7 +919,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
     <!-- AI Stylist Recommendation Box -->
     <div class="ai-advice-card" id="aiAdviceBox">
-      ✨ <b>AI Stilist:</b> «📷 Kamera (Selfi)» yoki «🖼 Galereyadan rasm» tugmasini bosing — Google MediaPipe AI yuzingizdagi 478 ta nuqtani o'lchab, yuz shaklingizga eng mos haqiqiy jonli soch turmaklarini chiqarib beradi!
+      🍌 <b>Gemini Nano Banana AI:</b> «📷 Kamera (Selfi)» yoki «🖼 Galereyadan rasm» tugmasini bosing — Gemini Nano Banana AI sizning o'z yuzingizga tanlangan soch va soqolni haqiqiy jonli fotosuratdek qilib kiygizib beradi!
     </div>
 
     <!-- Face Shape Selector (Auto-detected + Manual Override) -->
@@ -930,7 +943,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       </div>
       <div class="color-row" id="colorSwatches">
         <div class="color-swatch active" data-color="natural_black">
-          <span class="dot" style="background:#141418;"></span> Tabiiy
+          <span class="dot" style="background:#141418;"></span> Tabiiy Qora
         </div>
         <div class="color-swatch" data-color="dark_brown">
           <span class="dot" style="background:#4a2c18;"></span> Issiq Kashtan
@@ -947,7 +960,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     <!-- Beard Style Selector -->
     <div class="panel-card">
       <div class="sec-title">
-        <span>🧔 Soqol uslubi (Sartarosh uchun belgi)</span>
+        <span>🧔 Soqol uslubi</span>
       </div>
       <div class="chips-scroll" id="beardChips"></div>
     </div>
@@ -979,7 +992,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       } catch (e) {}
     }
 
-    // Real high-resolution men's haircut portraits with pre-calibrated head coordinates (normalized 0..1)
     const HAIRSTYLES = [
       {
         id: "low_fade_crop",
@@ -987,8 +999,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "🔥 Eng mashhur",
         desc: "Yonlari pastdan silliq fade va tepasi teksturali zamonaviy turmak",
         shapes: ["oval", "square", "diamond", "round"],
-        photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.34, rx: 0.27, ry: 0.23 }
+        photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "high_skin_fade_quiff",
@@ -996,8 +1007,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "⚡ Hajmli",
         desc: "Yonlari nolga yaqin fade va old qismi ko'tarilgan hajmli Quiff",
         shapes: ["round", "oval", "square"],
-        photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.33, rx: 0.27, ry: 0.23 }
+        photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "classic_side_part",
@@ -1005,8 +1015,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "👔 Klassika",
         desc: "Yonga taralgan rasmiy va tartibli jentlmen uslubi",
         shapes: ["oval", "square", "oblong", "diamond"],
-        photo: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.31, rx: 0.26, ry: 0.22 }
+        photo: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "modern_pompadour",
@@ -1014,8 +1023,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "👑 Premium",
         desc: "Tepa qismi orqaga va yuqoriga silliq hajmli taralgan",
         shapes: ["round", "oval", "square"],
-        photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.33, rx: 0.28, ry: 0.24 }
+        photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "buzz_cut_fade",
@@ -1023,8 +1031,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "💪 Sport",
         desc: "Kalta, keskin konturli va jag'ni ochuvchi sport uslubi",
         shapes: ["square", "oval", "diamond"],
-        photo: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.33, rx: 0.26, ry: 0.21 }
+        photo: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "undercut_slick",
@@ -1032,8 +1039,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "✨ Kontrast",
         desc: "Yonlari kalta, tepasi uzun kontrastli zamonaviy uslub",
         shapes: ["oval", "round", "diamond"],
-        photo: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.32, rx: 0.28, ry: 0.23 }
+        photo: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "french_crop",
@@ -1041,8 +1047,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "🎯 Trend 2026",
         desc: "Peshona chizig'i tekis va tepasi qalin teksturali Yevropa stili",
         shapes: ["oblong", "oval", "diamond", "square"],
-        photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.32, rx: 0.27, ry: 0.23 }
+        photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "curly_taper",
@@ -1050,8 +1055,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "🌊 Jingalak",
         desc: "To'lqinli/jingalak tabiiy hajm va toza yon fade",
         shapes: ["oval", "oblong", "diamond", "round"],
-        photo: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.33, rx: 0.30, ry: 0.25 }
+        photo: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "modern_mullet",
@@ -1059,8 +1063,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "🔥 Yoshlarbop",
         desc: "Quloq atrofi yarim oy fade va teksturali zamonaviy ko'rinish",
         shapes: ["oval", "diamond", "square"],
-        photo: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.32, rx: 0.28, ry: 0.24 }
+        photo: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=720&auto=format&fit=crop&q=85"
       },
       {
         id: "textured_fringe",
@@ -1068,8 +1071,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         badge: "🌟 Tabiiy",
         desc: "Oldinga tushgan erkin va tabiiy teksturali turmak",
         shapes: ["oblong", "diamond", "oval"],
-        photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=720&auto=format&fit=crop&q=85",
-        hairBox: { cx: 0.50, cy: 0.33, rx: 0.27, ry: 0.22 }
+        photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=720&auto=format&fit=crop&q=85"
       }
     ];
 
@@ -1082,15 +1084,13 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     ];
 
     const imageCache = {};
+    const nanoBananaCache = {};
     const state = {
       hasUserPhoto: false,
-      viewMode: "model", // starts in "model" until user takes selfie, then auto-switches to "split" or "blend"
+      viewMode: "model",
       userCanvas: document.createElement("canvas"),
-      userLandmarks: null,
+      generatedImage: null,
       faceBox: { cx: 360, cy: 430, rx: 165, ry: 215, foreheadY: 250 },
-      offsetX: 0,
-      offsetY: 0,
-      scaleAdjust: 1.0,
       faceShape: "oval",
       styleId: "low_fade_crop",
       beardId: "fade_beard",
@@ -1108,7 +1108,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     const faceGuideOverlay = document.getElementById("faceGuideOverlay");
     const cameraControls = document.getElementById("cameraControls");
     const photoControls = document.getElementById("photoControls");
-    const adjustBar = document.getElementById("adjustBar");
+    const runNanoBananaBtn = document.getElementById("runNanoBananaBtn");
+    const aiLoadingOverlay = document.getElementById("aiLoadingOverlay");
     const compareBtn = document.getElementById("compareBtn");
     const variantsGrid = document.getElementById("variantsGrid");
     const aiAdviceBox = document.getElementById("aiAdviceBox");
@@ -1116,7 +1117,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     const matchBadge = document.getElementById("matchBadge");
     const aiStatusBadge = document.getElementById("aiStatusBadge");
 
-    // Preload real HD hair images with CORS enabled
     function loadStyleImage(styleObj) {
       if (imageCache[styleObj.id]) return Promise.resolve(imageCache[styleObj.id]);
       return new Promise((resolve) => {
@@ -1131,7 +1131,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       });
     }
 
-    // Load Google MediaPipe Face Landmarker in background for 478-point real 3D face detection
     async function initMediaPipe() {
       try {
         const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
@@ -1146,10 +1145,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
           runningMode: "IMAGE",
           numFaces: 1
         });
-        aiStatusBadge.textContent = "🧠 3D AI TAYYOR";
-      } catch (e) {
-        console.log("MediaPipe fallback to smart skin detector:", e);
-      }
+      } catch (e) {}
     }
 
     function setViewMode(mode) {
@@ -1157,33 +1153,31 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       document.querySelectorAll(".mode-tab").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.mode === mode);
       });
-      adjustBar.style.display = (mode === "blend" && state.hasUserPhoto) ? "flex" : "none";
       renderMainStage();
     }
 
     document.querySelectorAll(".mode-tab").forEach(btn => {
       btn.onclick = () => {
         const m = btn.dataset.mode;
-        if ((m === "split" || m === "blend") && !state.hasUserPhoto) {
+        if ((m === "nanobanana" || m === "split") && !state.hasUserPhoto) {
           startCamera();
           return;
         }
         setViewMode(m);
+        if (m === "nanobanana" && state.hasUserPhoto && !state.generatedImage) {
+          triggerNanoBananaGeneration();
+        }
       };
     });
 
-    // Detect 478 3D face landmarks and classify exact face shape
     function detectUserFaceAndShape() {
       const uc = state.userCanvas;
       const w = uc.width, h = uc.height;
-
       if (state.faceLandmarker) {
         try {
           const res = state.faceLandmarker.detect(uc);
           if (res && res.faceLandmarks && res.faceLandmarks.length > 0) {
             const lm = res.faceLandmarks[0];
-            state.userLandmarks = lm;
-            // Key MediaPipe indices: 10 (top forehead), 152 (chin), 234 (left cheekbone), 454 (right cheekbone), 172 (left jaw), 397 (right jaw), 103 (left forehead), 332 (right forehead)
             const top = lm[10], chin = lm[152], leftCheek = lm[234], rightCheek = lm[454];
             const leftJaw = lm[172], rightJaw = lm[397], leftFore = lm[103], rightFore = lm[332];
 
@@ -1191,17 +1185,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
             const faceH = Math.hypot((chin.x - top.x) * w, (chin.y - top.y) * h);
             const jawW = Math.hypot((rightJaw.x - leftJaw.x) * w, (rightJaw.y - leftJaw.y) * h);
             const foreW = Math.hypot((rightFore.x - leftFore.x) * w, (rightFore.y - leftFore.y) * h);
-
-            const cx = ((leftCheek.x + rightCheek.x) * 0.5) * w;
-            const cy = ((top.y + chin.y) * 0.5) * h;
-
-            state.faceBox = {
-              cx: cx,
-              cy: cy,
-              rx: faceW * 0.54,
-              ry: faceH * 0.55,
-              foreheadY: top.y * h
-            };
 
             const ratio = faceH / Math.max(1, faceW);
             const jawRatio = jawW / Math.max(1, faceW);
@@ -1217,9 +1200,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
           }
         } catch (err) {}
       }
-
-      // Fallback heuristic if MediaPipe still loading
-      state.faceBox = { cx: w * 0.5, cy: h * 0.48, rx: w * 0.24, ry: h * 0.26, foreheadY: h * 0.25 };
     }
 
     function drawImageCover(g, img, dx, dy, dw, dh) {
@@ -1259,46 +1239,26 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         return;
       }
 
-      // MODE 1: 4K Real Model Portrait
-      if (!state.hasUserPhoto || state.viewMode === "model") {
-        if (styleImg) {
-          applyColorFilter(ctx, state.hairColor);
-          drawImageCover(ctx, styleImg, 0, 0, w, h);
-          ctx.filter = "none";
+      // MODE 1: Nano Banana AI Generated Photo on User's Face
+      if (state.viewMode === "nanobanana" && state.hasUserPhoto) {
+        if (state.generatedImage) {
+          drawImageCover(ctx, state.generatedImage, 0, 0, w, h);
+          drawStageFooter(ctx, w, h, "🍌 " + stObj.name + " (Nano Banana AI)", "Sizning yuzingizda Gemini Nano Banana AI yaratgan jonli natija");
+          ctx.restore();
+          return;
         }
-        drawStageFooter(
-          ctx,
-          w,
-          h,
-          stObj.name,
-          state.hasUserPhoto
-            ? "Jonli 4K namuna • «🔀 Yuzim + Jonli Stil» tabiga o'tib o'zingiz bilan solishtiring"
-            : "📷 O'z yuzingizda sinash uchun pastdagi «Kamera (Selfi)» tugmasini bosing"
-        );
-        ctx.restore();
-        return;
       }
 
-      // MODE 2: Side-by-Side Split Studio Comparison (User Face + Real HD Hairstyle Model)
-      if (state.viewMode === "split") {
+      // MODE 2: Side-by-Side Split Studio Comparison
+      if (state.viewMode === "split" && state.hasUserPhoto) {
         const halfW = w / 2;
-        // Left side: User's real face photo
         ctx.save();
         ctx.beginPath();
         ctx.rect(0, 0, halfW, h);
         ctx.clip();
         drawImageCover(ctx, state.userCanvas, 0, 0, halfW, h);
-
-        // Subtle face oval guide on user's face
-        ctx.strokeStyle = "rgba(212, 175, 55, 0.55)";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 5]);
-        ctx.beginPath();
-        ctx.ellipse(halfW * 0.5, h * 0.47, halfW * 0.34, h * 0.25, 0, 0, Math.PI * 2);
-        ctx.stroke();
         ctx.restore();
 
-        // Right side: Real HD Hairstyle Reference Photo
         if (styleImg) {
           ctx.save();
           ctx.beginPath();
@@ -1310,7 +1270,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
           ctx.restore();
         }
 
-        // Gold center divider line
         ctx.strokeStyle = "#d4af37";
         ctx.lineWidth = 3;
         ctx.beginPath();
@@ -1318,66 +1277,34 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         ctx.lineTo(halfW, h);
         ctx.stroke();
 
-        // Labels on both sides
         ctx.fillStyle = "rgba(9, 11, 16, 0.82)";
-        ctx.fillRect(12, 54, 130, 28);
-        ctx.fillRect(halfW + 12, 54, 165, 28);
+        ctx.fillRect(12, 54, 155, 28);
+        ctx.fillRect(halfW + 12, 54, 175, 28);
         ctx.fillStyle = "#f5e6b3";
-        ctx.font = "bold 18px sans-serif";
-        ctx.fillText("👤 Sizning yuzingiz", 20, 74);
-        ctx.fillText("💈 " + stObj.name, halfW + 20, 74);
+        ctx.font = "bold 16px sans-serif";
+        ctx.fillText("👤 Sizning yuzingiz", 18, 73);
+        ctx.fillText("💈 " + stObj.name, halfW + 18, 73);
 
-        drawStageFooter(ctx, w, h, stObj.name + " • Yuzingizga moslik tahlili", stObj.desc);
+        drawStageFooter(ctx, w, h, stObj.name + " • Yuzingizga moslik", stObj.desc);
         ctx.restore();
         return;
       }
 
-      // MODE 3: Photorealistic AI Hair Blend onto User's Photo ("Yuzimga Kiygizish")
-      ctx.drawImage(state.userCanvas, 0, 0, w, h);
-
+      // MODE 3: 4K Real Model Portrait
       if (styleImg) {
-        // Extract real hair crown & temples from the studio model photo using feathered alpha mask
-        const off = document.createElement("canvas");
-        off.width = 500;
-        off.height = 500;
-        const octx = off.getContext("2d");
-
-        applyColorFilter(octx, state.hairColor);
-        drawImageCover(octx, styleImg, 0, 0, 500, 500);
-        octx.filter = "none";
-
-        // Keep only the upper hair/crown horseshoe region with soft feathered edges
-        octx.globalCompositeOperation = "destination-in";
-        const maskGrad = octx.createRadialGradient(250, 145, 55, 250, 160, 175);
-        maskGrad.addColorStop(0, "rgba(0,0,0,1)");
-        maskGrad.addColorStop(0.68, "rgba(0,0,0,0.92)");
-        maskGrad.addColorStop(0.88, "rgba(0,0,0,0.35)");
-        maskGrad.addColorStop(1, "rgba(0,0,0,0)");
-        octx.fillStyle = maskGrad;
-        octx.fillRect(0, 0, 500, 500);
-
-        // Softly erase the model's inner forehead/eyes so the user's real face shines through 100%
-        octx.globalCompositeOperation = "destination-out";
-        const faceCut = octx.createRadialGradient(250, 275, 45, 250, 265, 128);
-        faceCut.addColorStop(0, "rgba(0,0,0,1)");
-        faceCut.addColorStop(0.68, "rgba(0,0,0,0.95)");
-        faceCut.addColorStop(1, "rgba(0,0,0,0)");
-        octx.fillStyle = faceCut;
-        octx.beginPath();
-        octx.ellipse(250, 285, 118, 145, 0, 0, Math.PI * 2);
-        octx.fill();
-
-        // Position aligned to user's MediaPipe forehead & head width
-        const fb = state.faceBox;
-        const targetW = fb.rx * 3.55 * state.scaleAdjust;
-        const targetH = fb.ry * 2.95 * state.scaleAdjust;
-        const destX = fb.cx - targetW * 0.5 + state.offsetX;
-        const destY = (fb.foreheadY || (fb.cy - fb.ry * 0.82)) - targetH * 0.43 + state.offsetY;
-
-        ctx.drawImage(off, destX, destY, targetW, targetH);
+        applyColorFilter(ctx, state.hairColor);
+        drawImageCover(ctx, styleImg, 0, 0, w, h);
+        ctx.filter = "none";
       }
-
-      drawStageFooter(ctx, w, h, stObj.name + " (Yuzingizda)", "Pastdagi ↑ ↓ ← → − + tugmalar bilan sochni aniq moslang");
+      drawStageFooter(
+        ctx,
+        w,
+        h,
+        stObj.name,
+        state.hasUserPhoto
+          ? "🍌 «AI Sochni Kiygizish» tugmasini bosing — Nano Banana AI o'z yuzingizda chizib beradi"
+          : "📷 O'z yuzingizda Nano Banana AI bilan sinash uchun «Kamera (Selfi)» tugmasini bosing"
+      );
       ctx.restore();
     }
 
@@ -1390,14 +1317,62 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       g.fillRect(0, h - 125, w, 125);
 
       g.fillStyle = "#f5e6b3";
-      g.font = "bold 23px sans-serif";
+      g.font = "bold 22px sans-serif";
       g.fillText("💈 " + title, 20, h - 46);
 
       if (subtitle) {
         g.fillStyle = "#cbd5e1";
-        g.font = "16px sans-serif";
+        g.font = "15px sans-serif";
         g.fillText(subtitle, 20, h - 20);
       }
+    }
+
+    async function triggerNanoBananaGeneration() {
+      if (!state.hasUserPhoto) {
+        startCamera();
+        return;
+      }
+      const cacheKey = `${state.styleId}_${state.beardId}_${state.hairColor}`;
+      if (nanoBananaCache[cacheKey]) {
+        state.generatedImage = nanoBananaCache[cacheKey];
+        setViewMode("nanobanana");
+        return;
+      }
+
+      aiLoadingOverlay.style.display = "flex";
+      try {
+        const jpegDataUrl = state.userCanvas.toDataURL("image/jpeg", 0.86);
+        const resp = await fetch("/webapp/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            style_id: state.styleId,
+            beard_id: state.beardId,
+            face_shape: state.faceShape,
+            hair_color: state.hairColor,
+            image: jpegDataUrl
+          })
+        });
+        const data = await resp.json();
+        if (data && data.ok) {
+          matchBadge.textContent = "🔥 " + data.match_score + "% Mos";
+          aiAdviceBox.innerHTML = "🍌 <b>Gemini Nano Banana AI:</b> " + data.ai_advice;
+
+          if (data.generated_image) {
+            const genImg = new Image();
+            genImg.onload = () => {
+              nanoBananaCache[cacheKey] = genImg;
+              state.generatedImage = genImg;
+              aiLoadingOverlay.style.display = "none";
+              setViewMode("nanobanana");
+            };
+            genImg.src = data.generated_image;
+            return;
+          }
+        }
+      } catch (err) {}
+      aiLoadingOverlay.style.display = "none";
+      setViewMode("split");
     }
 
     function renderSelectors() {
@@ -1411,7 +1386,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         btn.onclick = () => {
           state.beardId = b.id;
           renderSelectors();
-          requestAiAdvice();
+          if (state.hasUserPhoto) triggerNanoBananaGeneration();
+          else requestAiAdvice();
         };
         beardWrap.appendChild(btn);
       });
@@ -1436,8 +1412,11 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
           state.styleId = s.id;
           renderSelectors();
           renderVariantsBar();
-          renderMainStage();
-          requestAiAdvice();
+          if (state.hasUserPhoto) triggerNanoBananaGeneration();
+          else {
+            renderMainStage();
+            requestAiAdvice();
+          }
         };
         stylesWrap.appendChild(card);
       });
@@ -1462,8 +1441,11 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
           state.styleId = s.id;
           renderSelectors();
           renderVariantsBar();
-          renderMainStage();
-          requestAiAdvice();
+          if (state.hasUserPhoto) triggerNanoBananaGeneration();
+          else {
+            renderMainStage();
+            requestAiAdvice();
+          }
         };
         variantsGrid.appendChild(item);
       });
@@ -1499,12 +1481,11 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         const data = await resp.json();
         if (data && data.ok) {
           matchBadge.textContent = "🔥 " + data.match_score + "% Mos";
-          aiAdviceBox.innerHTML = "🤖 <b>AI Stilist tahlili:</b> " + data.ai_advice;
+          aiAdviceBox.innerHTML = "🍌 <b>Gemini Nano Banana AI:</b> " + data.ai_advice;
         }
       } catch (err) {}
     }
 
-    // Camera handling
     async function startCamera() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -1518,7 +1499,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         faceGuideOverlay.style.display = "flex";
         cameraControls.style.display = "flex";
         photoControls.style.display = "none";
-        adjustBar.style.display = "none";
       } catch (err) {
         alert("Kameraga ruxsat berilmadi. «🖼 Galereyadan rasm» tugmasi orqali rasmingizni tanlang.");
       }
@@ -1533,23 +1513,22 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
     function onUserPhotoLoaded() {
       state.hasUserPhoto = true;
-      state.offsetX = 0;
-      state.offsetY = 0;
-      state.scaleAdjust = 1.0;
+      state.generatedImage = null;
+      Object.keys(nanoBananaCache).forEach(k => delete nanoBananaCache[k]);
 
       videoEl.style.display = "none";
       faceGuideOverlay.style.display = "none";
       cameraControls.style.display = "none";
       photoControls.style.display = "flex";
+      runNanoBananaBtn.style.display = "inline-flex";
       mainCanvas.style.display = "block";
 
       detectUserFaceAndShape();
-      // Default to Split Comparison mode so user sees both their real face and the real HD haircut clearly
-      setViewMode("split");
-      requestAiAdvice();
+      triggerNanoBananaGeneration();
     }
 
     document.getElementById("startCameraBtn").onclick = startCamera;
+    runNanoBananaBtn.onclick = triggerNanoBananaGeneration;
 
     document.getElementById("cancelCameraBtn").onclick = () => {
       stopCamera();
@@ -1604,7 +1583,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
     document.getElementById("downloadBtn").onclick = () => {
       const link = document.createElement("a");
-      link.download = "jasur_barber_ai_" + state.styleId + ".png";
+      link.download = "jasur_barber_nanobanana_" + state.styleId + ".png";
       link.href = mainCanvas.toDataURL("image/png");
       link.click();
     };
@@ -1627,19 +1606,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       }
     });
 
-    document.querySelectorAll(".mini-ctrl").forEach(btn => {
-      btn.onclick = () => {
-        const act = btn.dataset.adj;
-        if (act === "up") state.offsetY -= 10;
-        if (act === "down") state.offsetY += 10;
-        if (act === "left") state.offsetX -= 10;
-        if (act === "right") state.offsetX += 10;
-        if (act === "smaller") state.scaleAdjust = Math.max(0.70, state.scaleAdjust - 0.05);
-        if (act === "larger") state.scaleAdjust = Math.min(1.40, state.scaleAdjust + 0.05);
-        renderMainStage();
-      };
-    });
-
     document.querySelectorAll("#faceShapeChips .chip").forEach(btn => {
       btn.onclick = () => setFaceShape(btn.dataset.shape, true);
     });
@@ -1650,8 +1616,11 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         document.querySelectorAll("#colorSwatches .color-swatch").forEach(el => {
           el.classList.toggle("active", el.dataset.color === state.hairColor);
         });
-        renderMainStage();
-        requestAiAdvice();
+        if (state.hasUserPhoto) triggerNanoBananaGeneration();
+        else {
+          renderMainStage();
+          requestAiAdvice();
+        }
       };
     });
 
@@ -1678,7 +1647,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       }
     };
 
-    // Initial render with real 4K studio photos immediately visible
     renderSelectors();
     renderVariantsBar();
     renderMainStage();
