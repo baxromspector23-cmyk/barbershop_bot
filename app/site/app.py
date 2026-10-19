@@ -792,19 +792,13 @@ def create_site_app(
 
     @web.middleware
     async def security_headers_middleware(request: web.Request, handler: Any) -> web.StreamResponse:
-        is_webapp = request.path.startswith("/webapp")
-        if is_webapp:
-            from app.site.webapp import WEBAPP_SECURITY_HEADERS
-            hdrs = WEBAPP_SECURITY_HEADERS
-        else:
-            hdrs = _SECURITY_HEADERS
         try:
             response = await handler(request)
         except web.HTTPException as exc:
-            for k, v in hdrs.items():
+            for k, v in _SECURITY_HEADERS.items():
                 exc.headers[k] = v
             raise
-        for k, v in hdrs.items():
+        for k, v in _SECURITY_HEADERS.items():
             response.headers[k] = v
         return response
 
@@ -1227,8 +1221,6 @@ def create_site_app(
         html_doc = _page_shell(f"Mijoz — {full_name}", body, logout_csrf=_make_csrf(session_token), active_tab="clients")
         return web.Response(text=html_doc, status=200, content_type="text/html", charset="utf-8")
 
-    from app.site.webapp import handle_webapp_generate, handle_webapp_page
-
     global _current_site_app
     app = web.Application(middlewares=[security_headers_middleware])
     app[_PASSWORD_HASH_KEY] = password_hash
@@ -1239,7 +1231,5 @@ def create_site_app(
     app.router.add_get("/", handle_root)
     app.router.add_get("/clients", handle_clients_list)
     app.router.add_get("/clients/{id}", handle_client_detail)
-    app.router.add_get("/webapp", handle_webapp_page)
-    app.router.add_post("/webapp/api/generate", handle_webapp_generate)
     return app
 

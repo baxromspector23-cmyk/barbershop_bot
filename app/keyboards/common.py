@@ -7,7 +7,6 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
-    WebAppInfo,
 )
 
 from app.config import settings
@@ -23,7 +22,6 @@ MENU_KEY_ICONS: dict[str, str | None] = {
     "client.menu_my_queue": "ticket",
     "client.menu_history": "history",
     "client.menu_lang": "lang",
-    "client.menu_ai_stylist": "zap",
     # Barber
     "barber.menu_queue": "queue",
     "barber.menu_payments": "money",
@@ -83,7 +81,6 @@ def btn(
     callback_data: str | None = None,
     *,
     url: str | None = None,
-    web_app: WebAppInfo | None = None,
     style: str | None = None,
     icon: str | None = None,
 ) -> InlineKeyboardButton:
@@ -104,8 +101,6 @@ def btn(
         kwargs["callback_data"] = callback_data
     if url is not None:
         kwargs["url"] = url
-    if web_app is not None:
-        kwargs["web_app"] = web_app
     if style is not None:
         kwargs["style"] = style
     if icon_id is not None:

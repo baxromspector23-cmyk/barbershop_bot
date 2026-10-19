@@ -215,17 +215,6 @@ async def handle_menu_command(message: Message, session: AsyncSession, user: Use
     await message.answer(text, reply_markup=markup, parse_mode="HTML")
 
 
-@router.message(Command("ai"))
-async def handle_ai_command(message: Message, user: User, lang: str):
-    from app.keyboards.client import get_ai_stylist_keyboard
-    await remove_reply_markup(message)
-    await message.answer(
-        t("client.ai_stylist_prompt", lang=lang),
-        reply_markup=get_ai_stylist_keyboard(lang=lang),
-        parse_mode="HTML",
-    )
-
-
 @router.callback_query(F.data.startswith("set_lang:"))
 async def handle_set_language(
     call: CallbackQuery,

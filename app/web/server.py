@@ -75,12 +75,8 @@ def create_web_app(
         return web.Response(status=200, text="OK")
 
     # Routes
-    from app.site.webapp import handle_webapp_generate, handle_webapp_page
-
     app.router.add_get("/health", health_handler)
     app.router.add_post("/internal/tick", tick_handler)
-    app.router.add_get("/webapp", handle_webapp_page)
-    app.router.add_post("/webapp/api/generate", handle_webapp_generate)
     webhook_path = f"/webhook/{settings.WEBHOOK_PATH_SECRET}"
     app.router.add_post(webhook_path, webhook_handler)
 
