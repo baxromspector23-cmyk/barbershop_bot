@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import logging
 import os
 from typing import Any
@@ -29,7 +31,7 @@ WEBAPP_SECURITY_HEADERS = {
     ),
 }
 
-# Detailed catalog of men's hairstyles with real HD studio reference portraits and Nano Banana prompts
+# Detailed catalog of men's hairstyles with real HD studio reference portraits and AI edit prompts
 HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
     {
         "id": "low_fade_crop",
@@ -39,7 +41,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yon tomonlari pastdan silliq o'tish (Low Fade) va tepasi teksturali zamonaviy turmak.",
         "best_shapes": ["oval", "square", "diamond", "round"],
         "photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&auto=format&fit=crop&q=85",
-        "prompt": "modern men's low skin fade with a textured French crop top and sharp natural hairline",
+        "prompt": "modern men's low skin fade haircut with a short textured French crop top and sharp clean hairline",
     },
     {
         "id": "high_skin_fade_quiff",
@@ -49,7 +51,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yonlari nolga yaqin baland fade, old qismi ko'tarilgan hajmli Quiff uslubi.",
         "best_shapes": ["round", "oval", "square"],
         "photo_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men's high skin fade with a volumetric textured quiff on top, clean barbershop fade",
+        "prompt": "men's high razor skin fade on the sides with a volumetric textured quiff hairstyle on top",
     },
     {
         "id": "classic_side_part",
@@ -59,7 +61,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yonga taralgan an'anaviy, tartibli va har qanday kiyimga mos tushuvchi klassik stil.",
         "best_shapes": ["oval", "square", "oblong", "diamond"],
         "photo_url": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&auto=format&fit=crop&q=85",
-        "prompt": "classic gentleman side part haircut with neat combed hair and clean taper fade sides",
+        "prompt": "classic gentleman side part haircut with neatly combed hair and tapered sides",
     },
     {
         "id": "modern_pompadour",
@@ -69,7 +71,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Tepa qismi orqaga va yuqoriga silliq taralgan, yuzni uzunroq va chiroyli ko'rsatuvchi turmak.",
         "best_shapes": ["round", "oval", "square"],
         "photo_url": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&auto=format&fit=crop&q=85",
-        "prompt": "modern men's pompadour haircut with slick brushed-back volumetric top and mid fade",
+        "prompt": "modern men's slick brushed-back volumetric pompadour haircut with clean mid fade sides",
     },
     {
         "id": "buzz_cut_fade",
@@ -79,7 +81,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Kalta, parvarishi oson, jag' chiziqlarini keskin va erkakcha ko'rsatuvchi harbiy-sport uslubi.",
         "best_shapes": ["square", "oval", "diamond"],
         "photo_url": "https://images.unsplash.com/photo-1463453091185-61582044d556?w=720&auto=format&fit=crop&q=85",
-        "prompt": "ultra-clean men's buzz cut with a mid drop skin fade and sharp forehead line-up",
+        "prompt": "ultra-short military buzz cut with a skin drop fade and sharp forehead line-up",
     },
     {
         "id": "undercut_slick",
@@ -89,7 +91,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Yonlari kalta va tepasi uzun kontrastli zamonaviy yoshlar uslubi.",
         "best_shapes": ["oval", "round", "diamond"],
         "photo_url": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men's disconnected undercut with short faded sides and slick textured longer top",
+        "prompt": "men's disconnected undercut with shaved sides and slick longer textured hair on top",
     },
     {
         "id": "french_crop",
@@ -99,7 +101,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Peshona qismi tekis chiziqli va tepasi qalin teksturali zamonaviy Yevropa uslubi.",
         "best_shapes": ["oblong", "oval", "diamond", "square"],
         "photo_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men's sharp French crop haircut with forward textured fringe and mid taper fade",
+        "prompt": "sharp men's French crop haircut with straight blunt fringe and high taper fade",
     },
     {
         "id": "curly_taper",
@@ -119,7 +121,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Quloq atrofi yarim oy (Burst fade) va orqa qismi teksturali zamonaviy trend.",
         "best_shapes": ["oval", "diamond", "square"],
         "photo_url": "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=720&auto=format&fit=crop&q=85",
-        "prompt": "modern men's burst fade mullet haircut with textured top and clean faded temples",
+        "prompt": "modern men's burst fade mullet haircut with spiky textured top and faded temples",
     },
     {
         "id": "textured_fringe",
@@ -129,16 +131,16 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "desc_uz": "Oldinga tushib turuvchi erkin, yengil va peshonani yopuvchi teksturali uslub.",
         "best_shapes": ["oblong", "diamond", "oval"],
         "photo_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=720&auto=format&fit=crop&q=85",
-        "prompt": "men's messy textured fringe haircut with low taper fade",
+        "prompt": "men's messy forward textured fringe haircut covering the forehead with low taper fade",
     },
 ]
 
 BEARD_CATALOG: list[dict[str, Any]] = [
-    {"id": "fade_beard", "name_uz": "Fade Soqol (Konturli)", "name_ru": "Фейд борода с контуром", "prompt": "neatly lined-up faded beard"},
-    {"id": "stubble", "name_uz": "Yengil soqol (Stubble)", "name_ru": "Лёгкая щетина", "prompt": "light 3-day designer stubble beard"},
-    {"id": "full_beard", "name_uz": "Qalin To'liq Soqol", "name_ru": "Полная густая борода", "prompt": "well-groomed full thick masculine beard"},
-    {"id": "goatee", "name_uz": "Goatee (Espanyolka)", "name_ru": "Эспаньолка (Goatee)", "prompt": "stylish goatee and mustache"},
-    {"id": "none", "name_uz": "Soqolsiz (Toza)", "name_ru": "Без бороды", "prompt": "clean-shaven face"},
+    {"id": "none", "name_uz": "Soqolsiz (O'z holicha)", "name_ru": "Без бороды", "prompt": "keep the original facial hair or clean-shaven jaw unchanged"},
+    {"id": "fade_beard", "name_uz": "Fade Soqol (Konturli)", "name_ru": "Фейд борода с контуром", "prompt": "add a neatly lined-up barbershop faded beard"},
+    {"id": "stubble", "name_uz": "Yengil soqol (Stubble)", "name_ru": "Лёгкая щетина", "prompt": "add a light 3-day designer stubble beard"},
+    {"id": "full_beard", "name_uz": "Qalin To'liq Soqol", "name_ru": "Полная густая борода", "prompt": "add a well-groomed full thick masculine beard"},
+    {"id": "goatee", "name_uz": "Goatee (Espanyolka)", "name_ru": "Эспаньолка (Goatee)", "prompt": "add a stylish goatee and mustache"},
 ]
 
 COLOR_PROMPTS: dict[str, str] = {
@@ -149,6 +151,106 @@ COLOR_PROMPTS: dict[str, str] = {
 }
 
 
+async def _call_qwen_or_realism_gpu_edit(
+    raw_bytes: bytes,
+    edit_instruction: str,
+) -> dict[str, Any] | None:
+    """
+    Calls live GPU Identity-Preserving Image Editors (Qwen-Image-Edit / Pro-Realism-Edit-Studio)
+    to modify ONLY the user's hairstyle & beard on their actual selfie photo!
+    """
+    timeout = aiohttp.ClientTimeout(total=42)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        # Engine A: kulkas2pintu-qwen-edit-image (has explicit preserve_identity=True!)
+        base_a = "https://kulkas2pintu-qwen-edit-image.hf.space"
+        try:
+            fd = aiohttp.FormData()
+            fd.add_field("files", raw_bytes, filename="face.jpg", content_type="image/jpeg")
+            async with session.post(f"{base_a}/gradio_api/upload", data=fd) as up_resp:
+                if up_resp.status == 200:
+                    up_list = await up_resp.json()
+                    if up_list:
+                        file_obj = {"path": up_list[0], "meta": {"_type": "gradio.FileData"}}
+                        args = [
+                            file_obj,
+                            edit_instruction,
+                            "",
+                            None,
+                            0,
+                            True,
+                            1.0,
+                            4,
+                            True,   # preserve_identity = True
+                            75,     # identity_strength
+                            1024,   # output_size
+                            False,
+                            False,
+                        ]
+                        async with session.post(f"{base_a}/gradio_api/call/edit", json={"data": args}) as call_resp:
+                            if call_resp.status == 200:
+                                ev_id = (await call_resp.json()).get("event_id")
+                                if ev_id:
+                                    async with session.get(f"{base_a}/gradio_api/call/edit/{ev_id}") as sse_resp:
+                                        sse_txt = await sse_resp.text()
+                                        for line in sse_txt.splitlines():
+                                            if line.startswith("data:") and "null" not in line[:15]:
+                                                parsed = json.loads(line[5:].strip())
+                                                if isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                                                    img_url = parsed[0].get("url")
+                                                    if not img_url and parsed[0].get("path"):
+                                                        img_url = f"{base_a}/gradio_api/file={parsed[0]['path']}"
+                                                    if img_url:
+                                                        async with session.get(img_url) as img_r:
+                                                            if img_r.status == 200:
+                                                                out_bytes = await img_r.read()
+                                                                out_b64 = base64.b64encode(out_bytes).decode("ascii")
+                                                                return {
+                                                                    "generated_image": f"data:image/png;base64,{out_b64}",
+                                                                    "engine": "ai_identity_editor_gpu",
+                                                                }
+        except Exception as exc:
+            logger.debug("Engine A (Qwen-Edit) skipped: %s", exc)
+
+        # Engine B: kogutt999-pro-realism-edit-studio
+        base_b = "https://kogutt999-pro-realism-edit-studio.hf.space"
+        try:
+            fd = aiohttp.FormData()
+            fd.add_field("files", raw_bytes, filename="face.jpg", content_type="image/jpeg")
+            async with session.post(f"{base_b}/gradio_api/upload", data=fd) as up_resp:
+                if up_resp.status == 200:
+                    up_list = await up_resp.json()
+                    if up_list:
+                        file_obj = {"path": up_list[0], "meta": {"_type": "gradio.FileData"}}
+                        args = [file_obj, None, edit_instruction, 0, True, 1.0, 4]
+                        async with session.post(f"{base_b}/gradio_api/call/infer", json={"data": args}) as call_resp:
+                            if call_resp.status == 200:
+                                ev_id = (await call_resp.json()).get("event_id")
+                                if ev_id:
+                                    async with session.get(f"{base_b}/gradio_api/call/infer/{ev_id}") as sse_resp:
+                                        sse_txt = await sse_resp.text()
+                                        for line in sse_txt.splitlines():
+                                            if line.startswith("data:") and "null" not in line[:15]:
+                                                parsed = json.loads(line[5:].strip())
+                                                if isinstance(parsed, list) and parsed and isinstance(parsed[0], list) and parsed[0]:
+                                                    first_item = parsed[0][0].get("image") or {}
+                                                    img_url = first_item.get("url")
+                                                    if not img_url and first_item.get("path"):
+                                                        img_url = f"{base_b}/gradio_api/file={first_item['path']}"
+                                                    if img_url:
+                                                        async with session.get(img_url) as img_r:
+                                                            if img_r.status == 200:
+                                                                out_bytes = await img_r.read()
+                                                                out_b64 = base64.b64encode(out_bytes).decode("ascii")
+                                                                return {
+                                                                    "generated_image": f"data:image/webp;base64,{out_b64}",
+                                                                    "engine": "pro_realism_studio_gpu",
+                                                                }
+        except Exception as exc:
+            logger.debug("Engine B (Pro-Realism) skipped: %s", exc)
+
+    return None
+
+
 async def _call_nano_banana_image_edit(
     image_b64: str,
     style_obj: dict[str, Any],
@@ -156,13 +258,7 @@ async def _call_nano_banana_image_edit(
     hair_color: str,
     face_shape: str,
 ) -> dict[str, Any] | None:
-    """
-    Calls Google Gemini 'Nano Banana' (gemini-2.5-flash-image / gemini-2.0-flash-exp-image-generation)
-    to photorealistically edit ONLY the hairstyle and beard on the client's real face photo
-    while keeping their exact facial identity, skin tone, eyes, and background 100% intact.
-    """
-    gemini_key = (settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY") or "").strip()
-    if not gemini_key or not image_b64:
+    if not image_b64:
         return None
 
     mime_type = "image/jpeg"
@@ -173,120 +269,115 @@ async def _call_nano_banana_image_edit(
         raw_b64 = image_b64
 
     color_desc = COLOR_PROMPTS.get(hair_color, "natural black hair color")
-    beard_desc = beard_obj.get("prompt", "neatly trimmed beard")
+    beard_desc = beard_obj.get("prompt", "keep original facial hair")
     edit_instruction = (
-        f"Edit this person's photo in photorealistic 8k barbershop quality: "
-        f"Change ONLY their hairstyle to a {style_obj['prompt']} with {color_desc}, "
-        f"and set facial hair to {beard_desc}. "
-        f"CRITICAL: Preserve the exact same person's face, eyes, nose, skin tone, facial expression, "
-        f"head angle, clothing, and background 100% unchanged. Make the new hair blend naturally into the scalp and temples."
+        f"Change ONLY this person's hairstyle to a {style_obj['prompt']} with {color_desc}, "
+        f"and {beard_desc}. "
+        f"Keep the exact same person's face, facial features, skin tone, clothing, and background completely unchanged."
     )
 
-    # 1. Try Nano Banana image generation models in priority order (returns edited photo + advice)
-    candidate_models = [
-        settings.GEMINI_IMAGE_MODEL or "gemini-2.5-flash-image",
-        "gemini-3.1-flash-image",
-        "gemini-3-pro-image",
-        "gemini-2.5-flash-image-preview",
-    ]
-    seen = set()
-    models_to_try = [m for m in candidate_models if not (m in seen or seen.add(m))]
+    gemini_key = (settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY") or "").strip()
+    ai_advice_text: str | None = None
+    generated_image_data: str | None = None
+    used_engine: str = "smart_hybrid_ai"
 
-    timeout = aiohttp.ClientTimeout(total=35)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        for model_name in models_to_try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
-            payload = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": edit_instruction},
-                            {
-                                "inlineData": {
-                                    "mimeType": mime_type,
-                                    "data": raw_b64,
-                                }
-                            },
-                        ]
-                    }
-                ],
-                "generationConfig": {
-                    "responseModalities": ["TEXT", "IMAGE"],
-                },
-            }
-            try:
-                async with session.post(url, json=payload) as resp:
-                    if resp.status != 200:
-                        continue
-                    data = await resp.json()
-                    candidates = data.get("candidates") or []
-                    if not candidates:
-                        continue
-                    parts = candidates[0].get("content", {}).get("parts") or []
-                    generated_img_b64 = None
-                    generated_mime = "image/png"
-                    ai_text = None
-                    for p in parts:
-                        inline = p.get("inlineData") or p.get("inline_data")
-                        if inline and inline.get("data"):
-                            generated_img_b64 = inline["data"]
-                            generated_mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
-                        elif p.get("text"):
-                            ai_text = p["text"].strip()
-
-                    if generated_img_b64:
-                        res: dict[str, Any] = {
-                            "generated_image": f"data:{generated_mime};base64,{generated_img_b64}",
-                            "engine": f"nano_banana ({model_name})",
+    # 1. Try Gemini Nano Banana image output first if key is available
+    if gemini_key:
+        candidate_models = [
+            settings.GEMINI_IMAGE_MODEL or "gemini-2.5-flash-image",
+            "gemini-3.1-flash-image",
+            "gemini-3-pro-image",
+        ]
+        timeout = aiohttp.ClientTimeout(total=25)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            for model_name in candidate_models:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                payload = {
+                    "contents": [
+                        {
+                            "parts": [
+                                {"text": edit_instruction},
+                                {"inlineData": {"mimeType": mime_type, "data": raw_b64}},
+                            ]
                         }
-                        if ai_text:
-                            res["ai_advice"] = ai_text
-                        return res
-            except Exception as exc:
-                logger.debug("NanoBanana call skipped on %s: %s", model_name, exc)
-
-        # 2. If Nano Banana image output hits Free-Tier limit, use Gemini 3.6 Flash / 2.5 Flash Vision on the real face photo
-        vision_prompt = (
-            f"Sen Jasur Barber salonining oliy toifali AI sartarosh-stilistisan. "
-            f"Rasmdagi mijozning haqiqiy yuz tuzilishini (peshona kengligi, yanoq suyaklari, jag' chizig'i va yuz shaklini) ko'rib tahlil qil. "
-            f"Mijoz tanlagan soch turmagi: «{style_obj['name_uz']}», soqol uslubi: «{beard_obj['name_uz']}». "
-            f"Shu mijozning o'z yuziga qarab 2-3 jumlada samimiy, professional va aniq o'zbek tilida tavsiya ber "
-            f"(bu turmak uning qaysi yuz qismini chiroyli ochib berishini ayt)."
-        )
-        for vision_model in ("gemini-3.6-flash", "gemini-2.5-flash"):
-            v_url = f"https://generativelanguage.googleapis.com/v1beta/models/{vision_model}:generateContent?key={gemini_key}"
-            v_payload = {
-                "contents": [
-                    {
-                        "parts": [
-                            {"text": vision_prompt},
-                            {
-                                "inlineData": {
-                                    "mimeType": mime_type,
-                                    "data": raw_b64,
-                                }
-                            },
-                        ]
-                    }
-                ]
-            }
-            try:
-                async with session.post(v_url, json=v_payload) as resp:
-                    if resp.status == 200:
+                    ],
+                    "generationConfig": {"responseModalities": ["TEXT", "IMAGE"]},
+                }
+                try:
+                    async with session.post(url, json=payload) as resp:
+                        if resp.status != 200:
+                            continue
                         data = await resp.json()
                         candidates = data.get("candidates") or []
-                        if candidates:
-                            parts = candidates[0].get("content", {}).get("parts") or []
-                            for p in parts:
-                                if p.get("text"):
-                                    return {
-                                        "ai_advice": p["text"].strip(),
-                                        "engine": f"gemini_vision ({vision_model})",
-                                    }
-            except Exception as exc:
-                logger.debug("Gemini vision fallback skipped on %s: %s", vision_model, exc)
+                        if not candidates:
+                            continue
+                        parts = candidates[0].get("content", {}).get("parts") or []
+                        for p in parts:
+                            inline = p.get("inlineData") or p.get("inline_data")
+                            if inline and inline.get("data"):
+                                g_mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                                generated_image_data = f"data:{g_mime};base64,{inline['data']}"
+                                used_engine = f"nano_banana ({model_name})"
+                            elif p.get("text"):
+                                ai_advice_text = p["text"].strip()
+                        if generated_image_data:
+                            break
+                except Exception:
+                    pass
 
-    return None
+            # Also get personalized Uzbek stylist advice from Gemini 2.5 Flash Vision
+            if not ai_advice_text:
+                vision_prompt = (
+                    f"Sen Jasur Barber salonining AI sartarosh-stilistisan. "
+                    f"Rasmdagi mijozning haqiqiy yuz tuzilishini ko'rib tahlil qil. "
+                    f"Mijoz tanlagan soch turmagi: «{style_obj['name_uz']}», soqol: «{beard_obj['name_uz']}». "
+                    f"Shu mijozning yuziga qarab 2 jumlada qisqa va aniq o'zbek tilida tavsiya ber."
+                )
+                for vision_model in ("gemini-2.5-flash", "gemini-3.6-flash"):
+                    v_url = f"https://generativelanguage.googleapis.com/v1beta/models/{vision_model}:generateContent?key={gemini_key}"
+                    v_payload = {
+                        "contents": [
+                            {
+                                "parts": [
+                                    {"text": vision_prompt},
+                                    {"inlineData": {"mimeType": mime_type, "data": raw_b64}},
+                                ]
+                            }
+                        ]
+                    }
+                    try:
+                        async with session.post(v_url, json=v_payload) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                candidates = data.get("candidates") or []
+                                if candidates:
+                                    parts = candidates[0].get("content", {}).get("parts") or []
+                                    for p in parts:
+                                        if p.get("text"):
+                                            ai_advice_text = p["text"].strip()
+                                            break
+                                if ai_advice_text:
+                                    break
+                    except Exception:
+                        pass
+
+    # 2. If Gemini key hit Free-Tier image quota, generate the actual edited photo on GPU via Qwen-Edit / Pro-Realism!
+    if not generated_image_data:
+        try:
+            raw_bytes = base64.b64decode(raw_b64)
+            gpu_res = await _call_qwen_or_realism_gpu_edit(raw_bytes, edit_instruction)
+            if gpu_res and gpu_res.get("generated_image"):
+                generated_image_data = gpu_res["generated_image"]
+                used_engine = gpu_res.get("engine", "gpu_image_editor")
+        except Exception as exc:
+            logger.warning("GPU image edit fallback failed: %s", exc)
+
+    out: dict[str, Any] = {"engine": used_engine}
+    if generated_image_data:
+        out["generated_image"] = generated_image_data
+    if ai_advice_text:
+        out["ai_advice"] = ai_advice_text
+    return out
 
 
 def _build_smart_stylist_advice(
@@ -318,18 +409,14 @@ def _build_smart_stylist_advice(
         s["id"] for s in HAIRSTYLES_CATALOG if face_shape in s.get("best_shapes", [])
     ][:4]
 
-    has_key = bool((settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY") or "").strip())
-
     advice = (
         f"✨ Sizning yuz tuzilishingiz — {shape_title}. "
         f"«{style_obj['name_uz']}» turmagi va «{beard_obj['name_uz']}» uyg'unligi yuz proporsiyasini "
-        f"{match_score}% aniqlikda ochib beradi. {style_obj['desc_uz']} "
-        f"Tanlangan tus: {color_label}."
+        f"{match_score}% aniqlikda ochib beradi. {style_obj['desc_uz']}"
     )
 
     return {
         "ok": True,
-        "nano_banana_ready": has_key,
         "face_shape": face_shape,
         "face_shape_title": shape_title,
         "match_score": match_score,
@@ -340,7 +427,7 @@ def _build_smart_stylist_advice(
         "hair_color": color_label,
         "recommended_styles": recommended_styles,
         "ai_advice": advice,
-        "engine": "nano_banana_ready" if has_key else "mediapipe_hd",
+        "engine": "nano_banana_gpu_hybrid",
     }
 
 
@@ -351,7 +438,7 @@ async def handle_webapp_generate(request: web.Request) -> web.Response:
         return web.json_response({"ok": False, "error": "Invalid JSON"}, status=400)
 
     style_id = str(payload.get("style_id") or "low_fade_crop")
-    beard_id = str(payload.get("beard_id") or "fade_beard")
+    beard_id = str(payload.get("beard_id") or "none")
     face_shape = str(payload.get("face_shape") or "oval")
     hair_color = str(payload.get("hair_color") or "natural_black")
     image_b64 = str(payload.get("image") or "")
@@ -440,7 +527,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     }
     .brand-title {
       font-weight: 800;
-      font-size: 15.5px;
+      font-size: 15px;
       color: var(--gold-light);
       letter-spacing: 0.3px;
     }
@@ -459,34 +546,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       box-shadow: 0 0 14px rgba(212,175,55,0.35);
     }
 
-    /* Mode Switcher */
-    .mode-tabs {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-      background: rgba(12, 15, 22, 0.9);
-      padding: 5px;
-      border-radius: 13px;
-      border: 1px solid var(--border);
-      margin-bottom: 11px;
-    }
-    .mode-tab {
-      border: none;
-      background: transparent;
-      color: var(--muted);
-      font-size: 11.5px;
-      font-weight: 700;
-      padding: 8px 6px;
-      border-radius: 9px;
-      cursor: pointer;
-      transition: all 0.18s ease;
-    }
-    .mode-tab.active {
-      background: linear-gradient(135deg, #e5c158, #c49b27);
-      color: #090b10;
-      box-shadow: 0 3px 10px rgba(212,175,55,0.28);
-    }
-
     /* Stage / Preview Card */
     .stage-card {
       background: var(--card);
@@ -501,7 +560,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       position: relative;
       width: 100%;
       aspect-ratio: 4 / 4.8;
-      max-height: 440px;
+      max-height: 450px;
       background: #0d111a;
       border-radius: 14px;
       overflow: hidden;
@@ -522,7 +581,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     .ai-loading-overlay {
       position: absolute;
       inset: 0;
-      background: rgba(8, 10, 15, 0.82);
+      background: rgba(8, 10, 15, 0.84);
       backdrop-filter: blur(8px);
       display: none;
       flex-direction: column;
@@ -530,19 +589,19 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       justify-content: center;
       z-index: 10;
       text-align: center;
-      padding: 20px;
+      padding: 22px;
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
     .spinner {
-      width: 46px;
-      height: 46px;
+      width: 48px;
+      height: 48px;
       border: 3.5px solid rgba(212,175,55,0.25);
       border-top-color: var(--gold);
       border-radius: 50%;
-      animation: spin 0.9s linear infinite;
-      margin-bottom: 12px;
+      animation: spin 0.85s linear infinite;
+      margin-bottom: 14px;
     }
     .face-guide-overlay {
       position: absolute;
@@ -606,9 +665,9 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       border: 1px solid rgba(255,255,255,0.16);
     }
     .btn-sm {
-      padding: 7px 11px;
-      font-size: 12px;
-      border-radius: 9px;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      border-radius: 10px;
     }
 
     /* Floating overlays on canvas */
@@ -643,10 +702,10 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     }
     .compare-btn {
       position: absolute;
-      bottom: 10px;
-      right: 10px;
+      bottom: 12px;
+      right: 12px;
       z-index: 5;
-      background: rgba(9, 11, 16, 0.88);
+      background: rgba(9, 11, 16, 0.90);
       border: 1px solid var(--gold);
       color: var(--gold-light);
       padding: 7px 12px;
@@ -890,21 +949,14 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       <div class="brand-left">
         <div class="logo-circle">🍌</div>
         <div>
-          <div class="brand-title">JASUR BARBER • NANO BANANA AI</div>
-          <div class="brand-sub">Gemini Pro / Nano Banana Jonli Soch Generatori</div>
+          <div class="brand-title">JASUR BARBER • AI STUDIO</div>
+          <div class="brand-sub">Yuzingizni o'zgartirmay AI soch kiygizish</div>
         </div>
       </div>
-      <span class="ai-badge" id="aiStatusBadge">✨ NANO BANANA</span>
+      <span class="ai-badge" id="aiStatusBadge">✨ AI PRO</span>
     </div>
 
-    <!-- 3 View Modes -->
-    <div class="mode-tabs">
-      <button type="button" class="mode-tab" data-mode="nanobanana">🍌 Nano Banana AI</button>
-      <button type="button" class="mode-tab" data-mode="split">🔀 Yuzim + Jonli Stil</button>
-      <button type="button" class="mode-tab active" data-mode="model">📸 4K Jonli Model</button>
-    </div>
-
-    <!-- Main Camera / Photo Viewport -->
+    <!-- Main Camera / Photo Viewport (Single Fullscreen Portrait — No Split Screen!) -->
     <div class="stage-card">
       <div class="viewport-box" id="viewportBox">
         <video id="cameraVideo" autoplay playsinline muted></video>
@@ -912,8 +964,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
         <div class="ai-loading-overlay" id="aiLoadingOverlay">
           <div class="spinner"></div>
-          <div style="font-weight:800; color:var(--gold-light); font-size:15px;">🍌 Gemini Nano Banana AI ishlamoqda...</div>
-          <div style="font-size:12px; color:var(--muted); margin-top:5px;">Yuzingizni o'zgartirmasdan tanlangan soch va soqolni fotorealistik chizmoqda (3–6 soniya)</div>
+          <div style="font-weight:800; color:var(--gold-light); font-size:15.5px;" id="loadingTitle">🍌 AI soch turmagini yuzingizga chizmoqda...</div>
+          <div style="font-size:12.5px; color:var(--muted); margin-top:6px;">Yuzingiz o'z holicha saqlanib, faqat soch yangilanmoqda (~8-12 soniya, kuting)</div>
         </div>
 
         <div class="canvas-top-badges" id="canvasBadges">
@@ -931,7 +983,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
       <!-- Camera Active Shutter Controls -->
       <div class="action-strip" id="cameraControls" style="display:none;">
-        <button type="button" class="btn btn-gold" id="capturePhotoBtn" style="flex:1;">📸 Suratga olish va Nano Banana AI</button>
+        <button type="button" class="btn btn-gold" id="capturePhotoBtn" style="flex:1;">📸 Suratga olish va AI Soch Kiygizish</button>
         <button type="button" class="btn btn-dark" id="cancelCameraBtn">✖ Bekor</button>
       </div>
 
@@ -940,7 +992,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         <div style="display:flex; gap:7px; flex-wrap:wrap;">
           <button type="button" class="btn btn-gold btn-sm" id="startCameraBtn">📷 Kamera (Selfi)</button>
           <label for="fileInput" class="btn btn-dark btn-sm" style="cursor:pointer;">🖼 Galereyadan rasm</label>
-          <button type="button" class="btn btn-gold btn-sm" id="runNanoBananaBtn" style="display:none;">🍌 AI Sochni Kiygizish</button>
+          <button type="button" class="btn btn-gold btn-sm" id="runNanoBananaBtn" style="display:none;">🔄 Qayta AI generatsiya</button>
         </div>
         <button type="button" class="btn btn-dark btn-sm" id="downloadBtn">📥 Saqlash</button>
       </div>
@@ -951,15 +1003,15 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     <!-- 4 Real Photo Top Variants -->
     <div class="variants-section" id="variantsSection">
       <div class="sec-title">
-        <span>🔥 Yuz shaklingiz uchun Top 4 Jonli Variant</span>
-        <span style="font-size:11px; color:var(--muted); font-weight:500;">Bosib ko'ring</span>
+        <span>🔥 Yuz shaklingiz uchun Top 4 Soch Turmagi</span>
+        <span style="font-size:11px; color:var(--muted); font-weight:500;">Bosib yuzingizda sinang</span>
       </div>
       <div class="variants-grid" id="variantsGrid"></div>
     </div>
 
     <!-- AI Stylist Recommendation Box -->
     <div class="ai-advice-card" id="aiAdviceBox">
-      🍌 <b>Gemini Nano Banana AI:</b> «📷 Kamera (Selfi)» yoki «🖼 Galereyadan rasm» tugmasini bosing — Gemini Nano Banana AI sizning o'z yuzingizga tanlangan soch va soqolni haqiqiy jonli fotosuratdek qilib kiygizib beradi!
+      🍌 <b>AI Stilist:</b> «📷 Kamera (Selfi)» yoki «🖼 Galereyadan rasm» tugmasini bosing — AI sizning o'z yuzingizni saqlagan holda tanlangan yangi soch turmagini boshingizga fotorealistik qilib kiygizib beradi!
     </div>
 
     <!-- Face Shape Selector (Auto-detected + Manual Override) -->
@@ -1008,7 +1060,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     <!-- 10 Real HD Hairstyles Catalog -->
     <div class="panel-card">
       <div class="sec-title">
-        <span>💇‍♂️ 10 Xil Jonli Soch Turmaklari Katalogi</span>
+        <span>💇‍♂️ 10 Xil Soch Turmaklari (Bosib yuzingizda ko'ring)</span>
       </div>
       <div class="styles-grid" id="stylesGrid"></div>
     </div>
@@ -1116,24 +1168,22 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     ];
 
     const BEARDS = [
+      { id: "none", name: "O'z holicha (Soqolsiz)" },
       { id: "fade_beard", name: "Fade Soqol" },
       { id: "stubble", name: "Yengil (3 kunlik)" },
       { id: "full_beard", name: "To'liq Qalin Soqol" },
-      { id: "goatee", name: "Goatee (Espanyolka)" },
-      { id: "none", name: "Soqolsiz (Toza)" }
+      { id: "goatee", name: "Goatee (Espanyolka)" }
     ];
 
     const imageCache = {};
     const nanoBananaCache = {};
     const state = {
       hasUserPhoto: false,
-      viewMode: "model",
       userCanvas: document.createElement("canvas"),
       generatedImage: null,
-      faceBox: { cx: 360, cy: 430, rx: 165, ry: 215, foreheadY: 250 },
       faceShape: "oval",
       styleId: "low_fade_crop",
-      beardId: "fade_beard",
+      beardId: "none",
       hairColor: "natural_black",
       showOriginal: false,
       stream: null,
@@ -1150,12 +1200,12 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     const photoControls = document.getElementById("photoControls");
     const runNanoBananaBtn = document.getElementById("runNanoBananaBtn");
     const aiLoadingOverlay = document.getElementById("aiLoadingOverlay");
+    const loadingTitle = document.getElementById("loadingTitle");
     const compareBtn = document.getElementById("compareBtn");
     const variantsGrid = document.getElementById("variantsGrid");
     const aiAdviceBox = document.getElementById("aiAdviceBox");
     const faceShapeBadge = document.getElementById("faceShapeBadge");
     const matchBadge = document.getElementById("matchBadge");
-    const aiStatusBadge = document.getElementById("aiStatusBadge");
 
     function loadStyleImage(styleObj) {
       if (imageCache[styleObj.id]) return Promise.resolve(imageCache[styleObj.id]);
@@ -1187,28 +1237,6 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         });
       } catch (e) {}
     }
-
-    function setViewMode(mode) {
-      state.viewMode = mode;
-      document.querySelectorAll(".mode-tab").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.mode === mode);
-      });
-      renderMainStage();
-    }
-
-    document.querySelectorAll(".mode-tab").forEach(btn => {
-      btn.onclick = () => {
-        const m = btn.dataset.mode;
-        if ((m === "nanobanana" || m === "split") && !state.hasUserPhoto) {
-          startCamera();
-          return;
-        }
-        setViewMode(m);
-        if (m === "nanobanana" && state.hasUserPhoto && !state.generatedImage) {
-          triggerNanoBananaGeneration();
-        }
-      };
-    });
 
     function detectUserFaceAndShape() {
       const uc = state.userCanvas;
@@ -1257,93 +1285,48 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       g.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     }
 
-    function applyColorFilter(g, colorKey) {
-      if (colorKey === "dark_brown") g.filter = "sepia(0.28) saturate(1.35) brightness(0.96)";
-      else if (colorKey === "warm_chestnut") g.filter = "sepia(0.45) saturate(1.55) brightness(1.04)";
-      else if (colorKey === "ash_graphite") g.filter = "saturate(0.25) contrast(1.08) brightness(1.06)";
-      else g.filter = "none";
-    }
-
     async function renderMainStage() {
       const w = mainCanvas.width, h = mainCanvas.height;
       const stObj = HAIRSTYLES.find(s => s.id === state.styleId) || HAIRSTYLES[0];
-      const styleImg = await loadStyleImage(stObj);
 
       ctx.save();
       ctx.clearRect(0, 0, w, h);
 
-      if (state.showOriginal && state.hasUserPhoto) {
-        ctx.drawImage(state.userCanvas, 0, 0, w, h);
-        drawStageFooter(ctx, w, h, "Sizning asl suratingiz", "");
-        ctx.restore();
-        return;
-      }
-
-      // MODE 1: Nano Banana AI Generated Photo on User's Face
-      if (state.viewMode === "nanobanana" && state.hasUserPhoto) {
-        if (state.generatedImage) {
+      if (state.hasUserPhoto) {
+        if (state.showOriginal || !state.generatedImage) {
+          ctx.drawImage(state.userCanvas, 0, 0, w, h);
+          drawStageFooter(
+            ctx,
+            w,
+            h,
+            state.showOriginal ? "Sizning asl suratingiz" : stObj.name,
+            state.showOriginal ? "Qo'yib yuborsangiz AI natijaga qaytadi" : "Pastdan istalgan soch turini tanlang — AI yuzingizda chizib beradi"
+          );
+        } else {
           drawImageCover(ctx, state.generatedImage, 0, 0, w, h);
-          drawStageFooter(ctx, w, h, "🍌 " + stObj.name + " (Nano Banana AI)", "Sizning yuzingizda Gemini Nano Banana AI yaratgan jonli natija");
-          ctx.restore();
-          return;
+          drawStageFooter(
+            ctx,
+            w,
+            h,
+            "✨ " + stObj.name + " (Sizning yuzingizda)",
+            "Asl rasm bilan solishtirish uchun «👁 Bosib turing: Asl rasm» tugmasini bosing"
+          );
         }
-      }
-
-      // MODE 2: Side-by-Side Split Studio Comparison
-      if (state.viewMode === "split" && state.hasUserPhoto) {
-        const halfW = w / 2;
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, halfW, h);
-        ctx.clip();
-        drawImageCover(ctx, state.userCanvas, 0, 0, halfW, h);
-        ctx.restore();
-
-        if (styleImg) {
-          ctx.save();
-          ctx.beginPath();
-          ctx.rect(halfW, 0, halfW, h);
-          ctx.clip();
-          applyColorFilter(ctx, state.hairColor);
-          drawImageCover(ctx, styleImg, halfW, 0, halfW, h);
-          ctx.filter = "none";
-          ctx.restore();
-        }
-
-        ctx.strokeStyle = "#d4af37";
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.moveTo(halfW, 0);
-        ctx.lineTo(halfW, h);
-        ctx.stroke();
-
-        ctx.fillStyle = "rgba(9, 11, 16, 0.82)";
-        ctx.fillRect(12, 54, 155, 28);
-        ctx.fillRect(halfW + 12, 54, 175, 28);
-        ctx.fillStyle = "#f5e6b3";
-        ctx.font = "bold 16px sans-serif";
-        ctx.fillText("👤 Sizning yuzingiz", 18, 73);
-        ctx.fillText("💈 " + stObj.name, halfW + 18, 73);
-
-        drawStageFooter(ctx, w, h, stObj.name + " • Yuzingizga moslik", stObj.desc);
         ctx.restore();
         return;
       }
 
-      // MODE 3: 4K Real Model Portrait
+      // Before user takes photo: show 4K studio sample
+      const styleImg = await loadStyleImage(stObj);
       if (styleImg) {
-        applyColorFilter(ctx, state.hairColor);
         drawImageCover(ctx, styleImg, 0, 0, w, h);
-        ctx.filter = "none";
       }
       drawStageFooter(
         ctx,
         w,
         h,
         stObj.name,
-        state.hasUserPhoto
-          ? "🍌 «AI Sochni Kiygizish» tugmasini bosing — Nano Banana AI o'z yuzingizda chizib beradi"
-          : "📷 O'z yuzingizda Nano Banana AI bilan sinash uchun «Kamera (Selfi)» tugmasini bosing"
+        "📷 O'z yuzingizda sinash uchun pastdagi «Kamera (Selfi)» yoki «Galereyadan rasm» tugmasini bosing"
       );
       ctx.restore();
     }
@@ -1357,13 +1340,13 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       g.fillRect(0, h - 125, w, 125);
 
       g.fillStyle = "#f5e6b3";
-      g.font = "bold 22px sans-serif";
-      g.fillText("💈 " + title, 20, h - 46);
+      g.font = "bold 21px sans-serif";
+      g.fillText("💈 " + title, 18, h - 46);
 
       if (subtitle) {
         g.fillStyle = "#cbd5e1";
-        g.font = "15px sans-serif";
-        g.fillText(subtitle, 20, h - 20);
+        g.font = "14.5px sans-serif";
+        g.fillText(subtitle, 18, h - 20);
       }
     }
 
@@ -1372,16 +1355,20 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         startCamera();
         return;
       }
+      const stObj = HAIRSTYLES.find(s => s.id === state.styleId) || HAIRSTYLES[0];
       const cacheKey = `${state.styleId}_${state.beardId}_${state.hairColor}`;
       if (nanoBananaCache[cacheKey]) {
         state.generatedImage = nanoBananaCache[cacheKey];
-        setViewMode("nanobanana");
+        renderMainStage();
         return;
       }
 
+      loadingTitle.textContent = `🍌 «${stObj.name}» yuzingizga chizilmoqda...`;
       aiLoadingOverlay.style.display = "flex";
+      renderMainStage();
+
       try {
-        const jpegDataUrl = state.userCanvas.toDataURL("image/jpeg", 0.86);
+        const jpegDataUrl = state.userCanvas.toDataURL("image/jpeg", 0.85);
         const resp = await fetch("/webapp/api/generate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1396,7 +1383,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         const data = await resp.json();
         if (data && data.ok) {
           matchBadge.textContent = "🔥 " + data.match_score + "% Mos";
-          aiAdviceBox.innerHTML = "🍌 <b>Gemini Nano Banana AI:</b> " + data.ai_advice;
+          aiAdviceBox.innerHTML = "🤖 <b>AI Stilist tahlili:</b> " + data.ai_advice;
 
           if (data.generated_image) {
             const genImg = new Image();
@@ -1404,7 +1391,11 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
               nanoBananaCache[cacheKey] = genImg;
               state.generatedImage = genImg;
               aiLoadingOverlay.style.display = "none";
-              setViewMode("nanobanana");
+              renderMainStage();
+            };
+            genImg.onerror = () => {
+              aiLoadingOverlay.style.display = "none";
+              renderMainStage();
             };
             genImg.src = data.generated_image;
             return;
@@ -1412,7 +1403,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         }
       } catch (err) {}
       aiLoadingOverlay.style.display = "none";
-      setViewMode("split");
+      renderMainStage();
     }
 
     function renderSelectors() {
@@ -1521,7 +1512,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         const data = await resp.json();
         if (data && data.ok) {
           matchBadge.textContent = "🔥 " + data.match_score + "% Mos";
-          aiAdviceBox.innerHTML = "🍌 <b>Gemini Nano Banana AI:</b> " + data.ai_advice;
+          aiAdviceBox.innerHTML = "🤖 <b>AI Stilist tahlili:</b> " + data.ai_advice;
         }
       } catch (err) {}
     }
@@ -1568,7 +1559,11 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     }
 
     document.getElementById("startCameraBtn").onclick = startCamera;
-    runNanoBananaBtn.onclick = triggerNanoBananaGeneration;
+    runNanoBananaBtn.onclick = () => {
+      const cacheKey = `${state.styleId}_${state.beardId}_${state.hairColor}`;
+      delete nanoBananaCache[cacheKey];
+      triggerNanoBananaGeneration();
+    };
 
     document.getElementById("cancelCameraBtn").onclick = () => {
       stopCamera();
@@ -1623,7 +1618,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
 
     document.getElementById("downloadBtn").onclick = () => {
       const link = document.createElement("a");
-      link.download = "jasur_barber_nanobanana_" + state.styleId + ".png";
+      link.download = "jasur_barber_ai_" + state.styleId + ".png";
       link.href = mainCanvas.toDataURL("image/png");
       link.click();
     };
