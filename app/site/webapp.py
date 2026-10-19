@@ -182,11 +182,12 @@ async def _call_nano_banana_image_edit(
         f"head angle, clothing, and background 100% unchanged. Make the new hair blend naturally into the scalp and temples."
     )
 
-    # Try Nano Banana image generation models in priority order
+    # 1. Try Nano Banana image generation models in priority order (returns edited photo + advice)
     candidate_models = [
         settings.GEMINI_IMAGE_MODEL or "gemini-2.5-flash-image",
+        "gemini-3.1-flash-image",
+        "gemini-3-pro-image",
         "gemini-2.5-flash-image-preview",
-        "gemini-2.0-flash-exp-image-generation",
     ]
     seen = set()
     models_to_try = [m for m in candidate_models if not (m in seen or seen.add(m))]
@@ -216,8 +217,6 @@ async def _call_nano_banana_image_edit(
             try:
                 async with session.post(url, json=payload) as resp:
                     if resp.status != 200:
-                        err_txt = await resp.text()
-                        logger.warning("NanoBanana model %s returned %s: %s", model_name, resp.status, err_txt[:250])
                         continue
                     data = await resp.json()
                     candidates = data.get("candidates") or []
@@ -244,7 +243,48 @@ async def _call_nano_banana_image_edit(
                             res["ai_advice"] = ai_text
                         return res
             except Exception as exc:
-                logger.warning("NanoBanana call failed on %s: %s", model_name, exc)
+                logger.debug("NanoBanana call skipped on %s: %s", model_name, exc)
+
+        # 2. If Nano Banana image output hits Free-Tier limit, use Gemini 3.6 Flash / 2.5 Flash Vision on the real face photo
+        vision_prompt = (
+            f"Sen Jasur Barber salonining oliy toifali AI sartarosh-stilistisan. "
+            f"Rasmdagi mijozning haqiqiy yuz tuzilishini (peshona kengligi, yanoq suyaklari, jag' chizig'i va yuz shaklini) ko'rib tahlil qil. "
+            f"Mijoz tanlagan soch turmagi: «{style_obj['name_uz']}», soqol uslubi: «{beard_obj['name_uz']}». "
+            f"Shu mijozning o'z yuziga qarab 2-3 jumlada samimiy, professional va aniq o'zbek tilida tavsiya ber "
+            f"(bu turmak uning qaysi yuz qismini chiroyli ochib berishini ayt)."
+        )
+        for vision_model in ("gemini-3.6-flash", "gemini-2.5-flash"):
+            v_url = f"https://generativelanguage.googleapis.com/v1beta/models/{vision_model}:generateContent?key={gemini_key}"
+            v_payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {"text": vision_prompt},
+                            {
+                                "inlineData": {
+                                    "mimeType": mime_type,
+                                    "data": raw_b64,
+                                }
+                            },
+                        ]
+                    }
+                ]
+            }
+            try:
+                async with session.post(v_url, json=v_payload) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        candidates = data.get("candidates") or []
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts") or []
+                            for p in parts:
+                                if p.get("text"):
+                                    return {
+                                        "ai_advice": p["text"].strip(),
+                                        "engine": f"gemini_vision ({vision_model})",
+                                    }
+            except Exception as exc:
+                logger.debug("Gemini vision fallback skipped on %s: %s", vision_model, exc)
 
     return None
 
