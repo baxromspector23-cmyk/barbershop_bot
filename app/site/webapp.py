@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import base64
-import hashlib
-import json
 import logging
 import os
 from typing import Any
@@ -19,17 +16,18 @@ WEBAPP_SECURITY_HEADERS = {
     "Permissions-Policy": "camera=(self), microphone=()",
     "Content-Security-Policy": (
         "default-src 'self' https: data: blob:; "
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://cdn.jsdelivr.net; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://telegram.org https://cdn.jsdelivr.net https://storage.googleapis.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "font-src 'self' https://fonts.gstatic.com data:; "
         "img-src 'self' data: blob: https:; "
         "media-src 'self' data: blob: mediastream:; "
-        "connect-src 'self' https:; "
+        "connect-src 'self' https: data: blob:; "
+        "worker-src 'self' blob: https:; "
         "frame-ancestors *"
     ),
 }
 
-# Detailed catalog of men's hairstyles and beard styles
+# Detailed catalog of men's hairstyles with real HD studio reference portraits
 HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
     {
         "id": "low_fade_crop",
@@ -38,6 +36,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "🔥 Eng mashhur",
         "desc_uz": "Yon tomonlari pastdan silliq o'tish (Low Fade) va tepasi teksturali zamonaviy turmak.",
         "best_shapes": ["oval", "square", "diamond", "round"],
+        "photo_url": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&auto=format&fit=crop&q=85",
         "prompt": "modern men low fade textured french crop haircut, sharp hairline, barbershop studio quality",
     },
     {
@@ -47,6 +46,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "⚡ Hajmli & Kuchli",
         "desc_uz": "Yonlari nolga yaqin baland fade, old qismi ko'tarilgan hajmli Quiff uslubi.",
         "best_shapes": ["round", "oval", "square"],
+        "photo_url": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&auto=format&fit=crop&q=85",
         "prompt": "men high skin fade textured quiff hairstyle, volumetric top, clean fade sides",
     },
     {
@@ -56,6 +56,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "👔 Biznes & Rasmiy",
         "desc_uz": "Yonga taralgan an'anaviy, tartibli va har qanday kiyimga mos tushuvchi klassik stil.",
         "best_shapes": ["oval", "square", "oblong", "diamond"],
+        "photo_url": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&auto=format&fit=crop&q=85",
         "prompt": "men classic gentleman side part taper fade haircut, neat combed hair, executive look",
     },
     {
@@ -65,6 +66,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "👑 Premium",
         "desc_uz": "Tepa qismi orqaga va yuqoriga silliq taralgan, yuzni uzunroq va chiroyli ko'rsatuvchi turmak.",
         "best_shapes": ["round", "oval", "square"],
+        "photo_url": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&auto=format&fit=crop&q=85",
         "prompt": "men modern pompadour mid fade haircut, slick volumetric top",
     },
     {
@@ -74,6 +76,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "💪 Sport & Minimal",
         "desc_uz": "Kalta, parvarishi oson, jag' chiziqlarini keskin va erkakcha ko'rsatuvchi harbiy-sport uslubi.",
         "best_shapes": ["square", "oval", "diamond"],
+        "photo_url": "https://images.unsplash.com/photo-1463453091185-61582044d556?w=720&auto=format&fit=crop&q=85",
         "prompt": "men buzz cut with mid drop skin fade and sharp line up",
     },
     {
@@ -83,6 +86,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "✨ Kontrast",
         "desc_uz": "Yonlari kalta va tepasi uzun kontrastli zamonaviy yoshlar uslubi.",
         "best_shapes": ["oval", "round", "diamond"],
+        "photo_url": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&auto=format&fit=crop&q=85",
         "prompt": "men disconnected undercut slick back textured hair",
     },
     {
@@ -92,6 +96,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "🎯 Trend 2026",
         "desc_uz": "Peshona qismi tekis chiziqli va tepasi qalin teksturali zamonaviy Yevropa uslubi.",
         "best_shapes": ["oblong", "oval", "diamond", "square"],
+        "photo_url": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=720&auto=format&fit=crop&q=85",
         "prompt": "men sharp french crop haircut with mid taper fade",
     },
     {
@@ -101,6 +106,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "🌊 To'lqinli soch",
         "desc_uz": "Jingalak yoki to'lqinli sochlar uchun tabiiy hajm va toza yon fade uyg'unligi.",
         "best_shapes": ["oval", "oblong", "diamond", "round"],
+        "photo_url": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=720&auto=format&fit=crop&q=85",
         "prompt": "men curly wavy top haircut with clean drop fade",
     },
     {
@@ -110,6 +116,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "🔥 Yoshlarbop",
         "desc_uz": "Quloq atrofi yarim oy (Burst fade) va orqa qismi teksturali zamonaviy trend.",
         "best_shapes": ["oval", "diamond", "square"],
+        "photo_url": "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=720&auto=format&fit=crop&q=85",
         "prompt": "men modern burst fade textured mullet haircut",
     },
     {
@@ -119,6 +126,7 @@ HAIRSTYLES_CATALOG: list[dict[str, Any]] = [
         "badge_uz": "🌟 Tabiiy ko'rinish",
         "desc_uz": "Oldinga tushib turuvchi erkin, yengil va peshonani yopuvchi teksturali uslub.",
         "best_shapes": ["oblong", "diamond", "oval"],
+        "photo_url": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=720&auto=format&fit=crop&q=85",
         "prompt": "men textured messy fringe haircut with low taper",
     },
 ]
@@ -139,10 +147,6 @@ async def _call_optional_cloud_ai(
     hair_color: str,
     face_shape: str,
 ) -> dict[str, Any] | None:
-    """
-    Optional cloud AI enhancement if GEMINI_API_KEY or OPENAI_API_KEY is configured in environment.
-    Returns extra AI stylist commentary or generated image URL/base64 when available.
-    """
     gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
     openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
 
@@ -255,7 +259,7 @@ def _build_smart_stylist_advice(
         f"✨ Sizning yuz tuzilishingiz — {shape_title}. "
         f"«{style_obj['name_uz']}» turmagi va «{beard_obj['name_uz']}» uyg'unligi yuz proporsiyasini "
         f"{match_score}% aniqlikda ochib beradi. {style_obj['desc_uz']} "
-        f"Tanlangan tus: {color_label} — sartaroshga ushbu tayyor variantni ko'rsatib xuddi shunday qirqishni so'rashingiz mumkin!"
+        f"Tanlangan tus: {color_label} — sartaroshga ushbu jonli namunani ko'rsatib xuddi shunday qirqishni so'rashingiz mumkin!"
     )
 
     return {
@@ -270,7 +274,7 @@ def _build_smart_stylist_advice(
         "hair_color": color_label,
         "recommended_styles": recommended_styles,
         "ai_advice": advice,
-        "engine": "smart_hybrid_ai",
+        "engine": "mediapipe_photorealistic_ai",
     }
 
 
@@ -309,8 +313,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
   <style>
     :root {
       --bg: #080a0f;
-      --card: rgba(18, 22, 32, 0.92);
-      --card-2: rgba(26, 32, 46, 0.95);
+      --card: rgba(18, 22, 32, 0.94);
+      --card-2: rgba(25, 31, 45, 0.96);
       --gold: #d4af37;
       --gold-light: #f5e6b3;
       --gold-dark: #9e7b12;
@@ -322,7 +326,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
     body {
       margin: 0;
-      padding: 0 0 96px 0;
+      padding: 0 0 98px 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: radial-gradient(circle at 20% 0%, rgba(212,175,55,0.16), transparent 45%),
                   radial-gradient(circle at 80% 90%, rgba(185,28,28,0.10), transparent 45%),
@@ -338,7 +342,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     .wrap {
       max-width: 520px;
       margin: 0 auto;
-      padding: 14px 14px 28px;
+      padding: 12px 13px 28px;
     }
     .top-header {
       display: flex;
@@ -348,8 +352,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 12px 15px;
-      margin-bottom: 14px;
+      padding: 11px 14px;
+      margin-bottom: 12px;
       box-shadow: 0 10px 28px rgba(0,0,0,0.45);
     }
     .brand-left {
@@ -358,35 +362,63 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       gap: 10px;
     }
     .logo-circle {
-      width: 40px;
-      height: 40px;
-      border-radius: 12px;
+      width: 38px;
+      height: 38px;
+      border-radius: 11px;
       background: linear-gradient(135deg, rgba(212,175,55,0.28), rgba(212,175,55,0.06));
       border: 1px solid var(--gold);
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 20px;
+      font-size: 19px;
     }
     .brand-title {
       font-weight: 800;
-      font-size: 16px;
+      font-size: 15.5px;
       color: var(--gold-light);
       letter-spacing: 0.3px;
     }
     .brand-sub {
-      font-size: 11.5px;
+      font-size: 11px;
       color: var(--muted);
     }
     .ai-badge {
       background: linear-gradient(135deg, #e5c158, #b5891c);
       color: #080a0f;
       font-weight: 800;
-      font-size: 11px;
-      padding: 5px 10px;
+      font-size: 10.5px;
+      padding: 5px 9px;
       border-radius: 999px;
-      letter-spacing: 0.4px;
-      box-shadow: 0 0 16px rgba(212,175,55,0.35);
+      letter-spacing: 0.3px;
+      box-shadow: 0 0 14px rgba(212,175,55,0.35);
+    }
+
+    /* Mode Switcher */
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      background: rgba(12, 15, 22, 0.9);
+      padding: 5px;
+      border-radius: 13px;
+      border: 1px solid var(--border);
+      margin-bottom: 11px;
+    }
+    .mode-tab {
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      padding: 8px 6px;
+      border-radius: 9px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+    .mode-tab.active {
+      background: linear-gradient(135deg, #e5c158, #c49b27);
+      color: #090b10;
+      box-shadow: 0 3px 10px rgba(212,175,55,0.28);
     }
 
     /* Stage / Preview Card */
@@ -394,20 +426,20 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 18px;
-      padding: 14px;
-      margin-bottom: 14px;
+      padding: 12px;
+      margin-bottom: 13px;
       box-shadow: 0 14px 34px rgba(0,0,0,0.55);
       position: relative;
     }
     .viewport-box {
       position: relative;
       width: 100%;
-      aspect-ratio: 3 / 3.7;
-      max-height: 430px;
+      aspect-ratio: 4 / 4.8;
+      max-height: 440px;
       background: #0d111a;
       border-radius: 14px;
       overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.12);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -433,14 +465,13 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     .face-oval {
       width: 58%;
       height: 68%;
-      border: 2px dashed rgba(212, 175, 55, 0.78);
+      border: 2px dashed rgba(212, 175, 55, 0.82);
       border-radius: 50% 50% 46% 46% / 44% 44% 56% 56%;
-      box-shadow: 0 0 0 9999px rgba(6, 8, 14, 0.42), inset 0 0 24px rgba(212, 175, 55, 0.22);
-      transition: all 0.25s ease;
+      box-shadow: 0 0 0 9999px rgba(6, 8, 14, 0.45), inset 0 0 24px rgba(212, 175, 55, 0.22);
     }
     .guide-hint {
       margin-top: 10px;
-      background: rgba(8, 10, 15, 0.82);
+      background: rgba(8, 10, 15, 0.86);
       border: 1px solid var(--border);
       color: var(--gold-light);
       font-size: 12px;
@@ -449,61 +480,34 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       border-radius: 999px;
       z-index: 2;
     }
-    .empty-state {
-      text-align: center;
-      padding: 24px 18px;
-      z-index: 2;
-    }
-    .empty-icon {
-      width: 68px;
-      height: 68px;
-      border-radius: 50%;
-      margin: 0 auto 12px;
-      background: radial-gradient(circle, rgba(212,175,55,0.24), rgba(212,175,55,0.04));
-      border: 1.5px solid var(--gold);
+
+    .action-strip {
       display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 30px;
-      box-shadow: 0 0 24px rgba(212,175,55,0.25);
-    }
-    .empty-title {
-      font-size: 17px;
-      font-weight: 700;
-      color: #fff;
-      margin-bottom: 6px;
-    }
-    .empty-desc {
-      font-size: 13px;
-      color: var(--muted);
-      line-height: 1.45;
-      margin-bottom: 18px;
-    }
-    .btn-row {
-      display: flex;
-      gap: 9px;
-      justify-content: center;
+      gap: 8px;
+      margin-top: 10px;
       flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
     }
     .btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
-      padding: 11px 16px;
-      border-radius: 12px;
+      gap: 6px;
+      padding: 10px 14px;
+      border-radius: 11px;
       font-weight: 700;
-      font-size: 13.5px;
+      font-size: 13px;
       border: none;
       cursor: pointer;
-      transition: transform 0.15s ease, filter 0.15s ease;
+      transition: transform 0.15s ease;
       text-decoration: none;
     }
     .btn:active { transform: scale(0.97); }
     .btn-gold {
       background: linear-gradient(135deg, #edd071 0%, #d4af37 55%, #aa820a 100%);
       color: #090b10;
-      box-shadow: 0 5px 18px rgba(212,175,55,0.32);
+      box-shadow: 0 4px 15px rgba(212,175,55,0.3);
     }
     .btn-dark {
       background: rgba(255,255,255,0.08);
@@ -511,9 +515,9 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       border: 1px solid rgba(255,255,255,0.16);
     }
     .btn-sm {
-      padding: 8px 12px;
-      font-size: 12.5px;
-      border-radius: 10px;
+      padding: 7px 11px;
+      font-size: 12px;
+      border-radius: 9px;
     }
 
     /* Floating overlays on canvas */
@@ -522,7 +526,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       top: 10px;
       left: 10px;
       right: 10px;
-      display: none;
+      display: flex;
       justify-content: space-between;
       align-items: center;
       z-index: 4;
@@ -539,7 +543,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       font-weight: 700;
     }
     .pill-match {
-      background: rgba(22, 163, 74, 0.88);
+      background: rgba(22, 163, 74, 0.90);
       color: #fff;
       padding: 5px 10px;
       border-radius: 999px;
@@ -551,23 +555,22 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       bottom: 10px;
       right: 10px;
       z-index: 5;
-      display: none;
-      background: rgba(9, 11, 16, 0.86);
+      background: rgba(9, 11, 16, 0.88);
       border: 1px solid var(--gold);
       color: var(--gold-light);
       padding: 7px 12px;
       border-radius: 10px;
-      font-size: 12px;
+      font-size: 11.5px;
       font-weight: 700;
       cursor: pointer;
       user-select: none;
     }
 
-    /* Fine-tune hair adjustment bar */
+    /* Fine-tune adjustment bar */
     .adjust-bar {
       display: none;
-      margin-top: 11px;
-      padding-top: 10px;
+      margin-top: 9px;
+      padding-top: 9px;
       border-top: 1px solid rgba(255,255,255,0.08);
       gap: 8px;
       align-items: center;
@@ -577,7 +580,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     .adjust-group {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       font-size: 11.5px;
       color: var(--muted);
     }
@@ -585,8 +588,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       width: 28px;
       height: 28px;
       border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(255,255,255,0.09);
+      border: 1px solid rgba(255,255,255,0.16);
       color: #fff;
       font-weight: 700;
       cursor: pointer;
@@ -595,20 +598,19 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       justify-content: center;
     }
 
-    /* 4 Variants Mini Grid */
+    /* 4 Variants Real Photo Grid */
     .variants-section {
-      display: none;
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 13px;
-      margin-bottom: 14px;
+      padding: 12px;
+      margin-bottom: 13px;
     }
     .sec-title {
       font-size: 13.5px;
       font-weight: 800;
       color: var(--gold-light);
-      margin: 0 0 10px 0;
+      margin: 0 0 9px 0;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -626,15 +628,16 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       cursor: pointer;
       text-align: center;
       transition: all 0.2s ease;
+      position: relative;
     }
     .variant-item.active {
       border-color: var(--gold);
-      box-shadow: 0 0 12px rgba(212,175,55,0.38);
+      box-shadow: 0 0 14px rgba(212,175,55,0.42);
       transform: translateY(-2px);
     }
-    .variant-item canvas {
+    .variant-item img {
       width: 100%;
-      aspect-ratio: 1 / 1.15;
+      aspect-ratio: 1 / 1.18;
       display: block;
       object-fit: cover;
     }
@@ -646,7 +649,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
-      background: rgba(9, 11, 16, 0.9);
+      background: rgba(9, 11, 16, 0.92);
     }
 
     /* Controls Card */
@@ -654,8 +657,8 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 14px;
-      margin-bottom: 14px;
+      padding: 13px;
+      margin-bottom: 13px;
     }
     .chips-scroll {
       display: flex;
@@ -684,45 +687,64 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       box-shadow: 0 3px 12px rgba(212,175,55,0.2);
     }
 
-    /* Hairstyles Cards Grid */
+    /* Real Photo Hairstyles Catalog Cards Grid */
     .styles-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 9px;
+      gap: 10px;
       margin-top: 8px;
     }
     .style-card {
       background: var(--card-2);
       border: 1.5px solid rgba(255,255,255,0.09);
-      border-radius: 13px;
-      padding: 10px 11px;
+      border-radius: 14px;
+      overflow: hidden;
       cursor: pointer;
       transition: all 0.18s ease;
-      position: relative;
       display: flex;
       flex-direction: column;
-      justify-content: space-between;
     }
     .style-card.active {
       border-color: var(--gold);
-      background: linear-gradient(145deg, rgba(212,175,55,0.19), rgba(18,22,32,0.95));
-      box-shadow: 0 4px 16px rgba(212,175,55,0.25);
+      box-shadow: 0 6px 20px rgba(212,175,55,0.32);
+      transform: translateY(-2px);
     }
-    .style-badge {
-      display: inline-block;
+    .style-thumb-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 4 / 4.2;
+      overflow: hidden;
+      background: #111520;
+    }
+    .style-thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.3s ease;
+    }
+    .style-card.active .style-thumb-wrap img {
+      transform: scale(1.04);
+    }
+    .style-badge-float {
+      position: absolute;
+      top: 7px;
+      left: 7px;
       font-size: 10px;
       font-weight: 700;
-      color: var(--gold-light);
-      background: rgba(212,175,55,0.14);
-      border: 1px solid rgba(212,175,55,0.3);
-      padding: 2px 7px;
+      color: #fff;
+      background: rgba(9, 11, 16, 0.82);
+      backdrop-filter: blur(6px);
+      border: 1px solid rgba(212,175,55,0.45);
+      padding: 3px 7px;
       border-radius: 999px;
-      margin-bottom: 5px;
-      align-self: flex-start;
+    }
+    .style-info {
+      padding: 9px 10px 10px;
     }
     .style-name {
       font-size: 13px;
-      font-weight: 700;
+      font-weight: 800;
       color: #fff;
       margin-bottom: 3px;
     }
@@ -735,7 +757,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     /* Color Swatches */
     .color-row {
       display: flex;
-      gap: 10px;
+      gap: 9px;
       align-items: center;
       flex-wrap: wrap;
     }
@@ -769,9 +791,9 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       background: linear-gradient(135deg, rgba(212,175,55,0.16), rgba(18,22,32,0.95));
       border: 1px solid var(--gold);
       border-radius: 15px;
-      padding: 13px 14px;
-      margin-bottom: 14px;
-      font-size: 13px;
+      padding: 12px 14px;
+      margin-bottom: 13px;
+      font-size: 12.8px;
       line-height: 1.48;
       color: #f1f5f9;
     }
@@ -782,7 +804,7 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(9, 11, 16, 0.94);
+      background: rgba(9, 11, 16, 0.95);
       backdrop-filter: blur(14px);
       border-top: 1px solid var(--border);
       padding: 10px 14px 14px;
@@ -810,81 +832,81 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
         <div class="logo-circle">💈</div>
         <div>
           <div class="brand-title">JASUR BARBER AI</div>
-          <div class="brand-sub">Yuz shakliga mos 3D/AI soch va soqol tanlash</div>
+          <div class="brand-sub">Jonli HD Fotorealistik Soch &amp; Soqol Tanlash</div>
         </div>
       </div>
-      <span class="ai-badge">✨ AI PRO</span>
+      <span class="ai-badge" id="aiStatusBadge">✨ HD REAL</span>
+    </div>
+
+    <!-- 3 View Modes for realistic experience -->
+    <div class="mode-tabs">
+      <button type="button" class="mode-tab active" data-mode="split">🔀 Yuzim + Jonli Stil</button>
+      <button type="button" class="mode-tab" data-mode="blend">🪄 Yuzimga Kiygizish</button>
+      <button type="button" class="mode-tab" data-mode="model">📸 4K Jonli Model</button>
     </div>
 
     <!-- Main Camera / Photo Viewport -->
     <div class="stage-card">
       <div class="viewport-box" id="viewportBox">
         <video id="cameraVideo" autoplay playsinline muted></video>
-        <canvas id="mainCanvas" width="720" height="888"></canvas>
+        <canvas id="mainCanvas" width="720" height="864" style="display:block;"></canvas>
 
         <div class="canvas-top-badges" id="canvasBadges">
           <span class="pill-badge" id="faceShapeBadge">🧠 Yuz: Oval</span>
           <span class="pill-match" id="matchBadge">🔥 98% Mos</span>
         </div>
 
-        <button type="button" class="compare-btn" id="compareBtn">👁 Oldin / Keyin</button>
+        <button type="button" class="compare-btn" id="compareBtn">👁 Bosib turing: Asl rasm</button>
 
         <div class="face-guide-overlay" id="faceGuideOverlay" style="display:none;">
           <div class="face-oval"></div>
           <div class="guide-hint">Yuzingizni oval markaziga joylashtiring</div>
         </div>
-
-        <div class="empty-state" id="emptyState">
-          <div class="empty-icon">🤳</div>
-          <div class="empty-title">Yuzingizga mos soch turmagini ko'ring!</div>
-          <div class="empty-desc">
-            Kamerani yoqib selfi tushing yoki galereyadan rasm yuklang.
-            AI yuzingiz shaklini tahlil qilib, <b>10 xil soch</b> va <b>5 xil soqol</b> turini yuzingizga chizib ko'rsatadi.
-          </div>
-          <div class="btn-row">
-            <button type="button" class="btn btn-gold" id="startCameraBtn">📷 Kamerani yoqish</button>
-            <label for="fileInput" class="btn btn-dark" style="cursor:pointer;">🖼 Rasm yuklash</label>
-            <button type="button" class="btn btn-dark btn-sm" id="demoFaceBtn">🧑 Demo modelda sinash</button>
-          </div>
-        </div>
       </div>
 
       <!-- Camera Active Shutter Controls -->
-      <div class="btn-row" id="cameraControls" style="display:none; margin-top:12px;">
+      <div class="action-strip" id="cameraControls" style="display:none;">
         <button type="button" class="btn btn-gold" id="capturePhotoBtn" style="flex:1;">📸 Suratga olish va AI tahlil</button>
         <button type="button" class="btn btn-dark" id="cancelCameraBtn">✖ Bekor</button>
       </div>
 
-      <!-- Loaded Photo Action Controls -->
+      <!-- Standard Camera / Upload Action Strip -->
+      <div class="action-strip" id="photoControls">
+        <div style="display:flex; gap:7px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-gold btn-sm" id="startCameraBtn">📷 Kamera (Selfi)</button>
+          <label for="fileInput" class="btn btn-dark btn-sm" style="cursor:pointer;">🖼 Galereyadan rasm</label>
+        </div>
+        <button type="button" class="btn btn-dark btn-sm" id="downloadBtn">📥 Rasmni saqlash</button>
+      </div>
+
+      <!-- Fine adjustment controls when user photo is loaded in blend mode -->
       <div class="adjust-bar" id="adjustBar">
         <div class="adjust-group">
-          <span>Joylashuv:</span>
+          <span>Sochni moslash:</span>
           <button type="button" class="mini-ctrl" data-adj="up" title="Yuqoriga">↑</button>
           <button type="button" class="mini-ctrl" data-adj="down" title="Pastga">↓</button>
+          <button type="button" class="mini-ctrl" data-adj="left" title="Chapga">←</button>
+          <button type="button" class="mini-ctrl" data-adj="right" title="O'ngga">→</button>
           <button type="button" class="mini-ctrl" data-adj="smaller" title="Kichraytirish">−</button>
           <button type="button" class="mini-ctrl" data-adj="larger" title="Kattalashtirish">+</button>
-        </div>
-        <div class="adjust-group">
-          <button type="button" class="btn btn-dark btn-sm" id="retakeBtn">🔄 Yangi rasm</button>
-          <button type="button" class="btn btn-dark btn-sm" id="downloadBtn">📥 Saqlash</button>
         </div>
       </div>
 
       <input type="file" id="fileInput" accept="image/*" style="display:none;">
     </div>
 
-    <!-- 4 AI Multi-Variant Previews -->
+    <!-- 4 Real Photo Top Variants -->
     <div class="variants-section" id="variantsSection">
       <div class="sec-title">
-        <span>🎨 Yuzingiz uchun 4 ta Top AI Variant</span>
-        <span style="font-size:11px; color:var(--muted); font-weight:500;">Bosib tanlang</span>
+        <span>🔥 Yuz shaklingiz uchun Top 4 Jonli Variant</span>
+        <span style="font-size:11px; color:var(--muted); font-weight:500;">Bosib ko'ring</span>
       </div>
       <div class="variants-grid" id="variantsGrid"></div>
     </div>
 
     <!-- AI Stylist Recommendation Box -->
     <div class="ai-advice-card" id="aiAdviceBox">
-      ✨ <b>AI Stilist:</b> Suratga tushing yoki rasm yuklang — biz yuzingiz proporsiyasini o'lchab, sizga eng yarashadigan soch va soqol variantlarini chizib beramiz!
+      ✨ <b>AI Stilist:</b> «📷 Kamera (Selfi)» yoki «🖼 Galereyadan rasm» tugmasini bosing — Google MediaPipe AI yuzingizdagi 478 ta nuqtani o'lchab, yuz shaklingizga eng mos haqiqiy jonli soch turmaklarini chiqarib beradi!
     </div>
 
     <!-- Face Shape Selector (Auto-detected + Manual Override) -->
@@ -904,20 +926,20 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     <!-- Hair Color Picker -->
     <div class="panel-card">
       <div class="sec-title">
-        <span>🎨 Soch va Soqol rangi</span>
+        <span>🎨 Soch rangi tusi</span>
       </div>
       <div class="color-row" id="colorSwatches">
         <div class="color-swatch active" data-color="natural_black">
-          <span class="dot" style="background:#141418;"></span> Qora
+          <span class="dot" style="background:#141418;"></span> Tabiiy
         </div>
         <div class="color-swatch" data-color="dark_brown">
-          <span class="dot" style="background:#382417;"></span> To'q jigarrang
+          <span class="dot" style="background:#4a2c18;"></span> Issiq Kashtan
         </div>
         <div class="color-swatch" data-color="warm_chestnut">
-          <span class="dot" style="background:#633d24;"></span> Kashtan
+          <span class="dot" style="background:#7a4b2a;"></span> Oltin Jigarrang
         </div>
         <div class="color-swatch" data-color="ash_graphite">
-          <span class="dot" style="background:#707782;"></span> Kulrang / Silver
+          <span class="dot" style="background:#7d8594;"></span> Kulrang / Silver
         </div>
       </div>
     </div>
@@ -925,15 +947,15 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     <!-- Beard Style Selector -->
     <div class="panel-card">
       <div class="sec-title">
-        <span>🧔 Soqol uslubi</span>
+        <span>🧔 Soqol uslubi (Sartarosh uchun belgi)</span>
       </div>
       <div class="chips-scroll" id="beardChips"></div>
     </div>
 
-    <!-- 10 Hairstyles Catalog -->
+    <!-- 10 Real HD Hairstyles Catalog -->
     <div class="panel-card">
       <div class="sec-title">
-        <span>💇‍♂️ Soch turmaklari (10 xil variant)</span>
+        <span>💇‍♂️ 10 Xil Jonli Soch Turmaklari Katalogi</span>
       </div>
       <div class="styles-grid" id="stylesGrid"></div>
     </div>
@@ -948,784 +970,720 @@ _WEBAPP_HTML = r"""<!DOCTYPE html>
     </div>
   </div>
 
-  <script>
-    (function() {
-      const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-      if (tg) {
-        try {
-          tg.ready();
-          tg.expand();
-        } catch (e) {}
+  <script type="module">
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) {
+      try {
+        tg.ready();
+        tg.expand();
+      } catch (e) {}
+    }
+
+    // Real high-resolution men's haircut portraits with pre-calibrated head coordinates (normalized 0..1)
+    const HAIRSTYLES = [
+      {
+        id: "low_fade_crop",
+        name: "Low Fade + Crop",
+        badge: "🔥 Eng mashhur",
+        desc: "Yonlari pastdan silliq fade va tepasi teksturali zamonaviy turmak",
+        shapes: ["oval", "square", "diamond", "round"],
+        photo: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.34, rx: 0.27, ry: 0.23 }
+      },
+      {
+        id: "high_skin_fade_quiff",
+        name: "High Fade + Quiff",
+        badge: "⚡ Hajmli",
+        desc: "Yonlari nolga yaqin fade va old qismi ko'tarilgan hajmli Quiff",
+        shapes: ["round", "oval", "square"],
+        photo: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.33, rx: 0.27, ry: 0.23 }
+      },
+      {
+        id: "classic_side_part",
+        name: "Classic Side Part",
+        badge: "👔 Klassika",
+        desc: "Yonga taralgan rasmiy va tartibli jentlmen uslubi",
+        shapes: ["oval", "square", "oblong", "diamond"],
+        photo: "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.31, rx: 0.26, ry: 0.22 }
+      },
+      {
+        id: "modern_pompadour",
+        name: "Modern Pompadour",
+        badge: "👑 Premium",
+        desc: "Tepa qismi orqaga va yuqoriga silliq hajmli taralgan",
+        shapes: ["round", "oval", "square"],
+        photo: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.33, rx: 0.28, ry: 0.24 }
+      },
+      {
+        id: "buzz_cut_fade",
+        name: "Buzz Cut + Fade",
+        badge: "💪 Sport",
+        desc: "Kalta, keskin konturli va jag'ni ochuvchi sport uslubi",
+        shapes: ["square", "oval", "diamond"],
+        photo: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.33, rx: 0.26, ry: 0.21 }
+      },
+      {
+        id: "undercut_slick",
+        name: "Undercut Slick",
+        badge: "✨ Kontrast",
+        desc: "Yonlari kalta, tepasi uzun kontrastli zamonaviy uslub",
+        shapes: ["oval", "round", "diamond"],
+        photo: "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.32, rx: 0.28, ry: 0.23 }
+      },
+      {
+        id: "french_crop",
+        name: "French Crop",
+        badge: "🎯 Trend 2026",
+        desc: "Peshona chizig'i tekis va tepasi qalin teksturali Yevropa stili",
+        shapes: ["oblong", "oval", "diamond", "square"],
+        photo: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.32, rx: 0.27, ry: 0.23 }
+      },
+      {
+        id: "curly_taper",
+        name: "Curly Drop Fade",
+        badge: "🌊 Jingalak",
+        desc: "To'lqinli/jingalak tabiiy hajm va toza yon fade",
+        shapes: ["oval", "oblong", "diamond", "round"],
+        photo: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.33, rx: 0.30, ry: 0.25 }
+      },
+      {
+        id: "modern_mullet",
+        name: "Burst Fade Mullet",
+        badge: "🔥 Yoshlarbop",
+        desc: "Quloq atrofi yarim oy fade va teksturali zamonaviy ko'rinish",
+        shapes: ["oval", "diamond", "square"],
+        photo: "https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.32, rx: 0.28, ry: 0.24 }
+      },
+      {
+        id: "textured_fringe",
+        name: "Textured Fringe",
+        badge: "🌟 Tabiiy",
+        desc: "Oldinga tushgan erkin va tabiiy teksturali turmak",
+        shapes: ["oblong", "diamond", "oval"],
+        photo: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=720&auto=format&fit=crop&q=85",
+        hairBox: { cx: 0.50, cy: 0.33, rx: 0.27, ry: 0.22 }
       }
+    ];
 
-      const HAIRSTYLES = [
-        { id: "low_fade_crop", name: "Low Fade + Crop", badge: "🔥 Eng mashhur", desc: "Yonlari pastdan fade va tepasi teksturali", shapes: ["oval","square","diamond","round"] },
-        { id: "high_skin_fade_quiff", name: "High Fade + Quiff", badge: "⚡ Hajmli", desc: "Yonlari nol fade va oldi ko'tarilgan Quiff", shapes: ["round","oval","square"] },
-        { id: "classic_side_part", name: "Classic Side Part", badge: "👔 Klassika", desc: "Yonga taralgan rasmiy jentlmen uslubi", shapes: ["oval","square","oblong","diamond"] },
-        { id: "modern_pompadour", name: "Modern Pompadour", badge: "👑 Premium", desc: "Yuqoriga va orqaga silliq hajmli taralgan", shapes: ["round","oval","square"] },
-        { id: "buzz_cut_fade", name: "Buzz Cut + Fade", badge: "💪 Sport", desc: "Kalta, keskin konturli erkakcha uslub", shapes: ["square","oval","diamond"] },
-        { id: "undercut_slick", name: "Undercut Slick", badge: "✨ Kontrast", desc: "Yonlari kalta, tepasi uzun kontrastli", shapes: ["oval","round","diamond"] },
-        { id: "french_crop", name: "French Crop", badge: "🎯 Trend 2026", desc: "Peshona chizig'i aniq va qalin tekstura", shapes: ["oblong","oval","diamond","square"] },
-        { id: "curly_taper", name: "Curly Drop Fade", badge: "🌊 Jingalak", desc: "To'lqinli/jingalak hajm va toza drop fade", shapes: ["oval","oblong","diamond","round"] },
-        { id: "modern_mullet", name: "Burst Fade Mullet", badge: "🔥 Yoshlarbop", desc: "Quloq atrofi yarim oy fade va zamonaviy orqa", shapes: ["oval","diamond","square"] },
-        { id: "textured_fringe", name: "Textured Fringe", badge: "🌟 Tabiiy", desc: "Oldinga tushgan erkin teksturali chiziqlar", shapes: ["oblong","diamond","oval"] }
-      ];
+    const BEARDS = [
+      { id: "fade_beard", name: "Fade Soqol" },
+      { id: "stubble", name: "Yengil (3 kunlik)" },
+      { id: "full_beard", name: "To'liq Qalin Soqol" },
+      { id: "goatee", name: "Goatee (Espanyolka)" },
+      { id: "none", name: "Soqolsiz (Toza)" }
+    ];
 
-      const BEARDS = [
-        { id: "none", name: "Soqolsiz (Toza)" },
-        { id: "stubble", name: "Yengil (3 kunlik)" },
-        { id: "fade_beard", name: "Fade Soqol" },
-        { id: "full_beard", name: "To'liq Qalin Soqol" },
-        { id: "goatee", name: "Goatee (Espanyolka)" }
-      ];
+    const imageCache = {};
+    const state = {
+      hasUserPhoto: false,
+      viewMode: "model", // starts in "model" until user takes selfie, then auto-switches to "split" or "blend"
+      userCanvas: document.createElement("canvas"),
+      userLandmarks: null,
+      faceBox: { cx: 360, cy: 430, rx: 165, ry: 215, foreheadY: 250 },
+      offsetX: 0,
+      offsetY: 0,
+      scaleAdjust: 1.0,
+      faceShape: "oval",
+      styleId: "low_fade_crop",
+      beardId: "fade_beard",
+      hairColor: "natural_black",
+      showOriginal: false,
+      stream: null,
+      faceLandmarker: null
+    };
+    state.userCanvas.width = 720;
+    state.userCanvas.height = 864;
 
-      const COLOR_PALETTES = {
-        natural_black: { base: "#121318", mid: "#22252e", hi: "#3b404f", skinShadow: "rgba(18,19,24,0.28)" },
-        dark_brown:    { base: "#271810", mid: "#3d261a", hi: "#5c3b28", skinShadow: "rgba(39,24,16,0.26)" },
-        warm_chestnut: { base: "#472916", mid: "#693e23", hi: "#8c5735", skinShadow: "rgba(71,41,22,0.25)" },
-        ash_graphite:  { base: "#3e434c", mid: "#636b78", hi: "#949eab", skinShadow: "rgba(62,67,76,0.24)" }
-      };
+    const videoEl = document.getElementById("cameraVideo");
+    const mainCanvas = document.getElementById("mainCanvas");
+    const ctx = mainCanvas.getContext("2d");
+    const faceGuideOverlay = document.getElementById("faceGuideOverlay");
+    const cameraControls = document.getElementById("cameraControls");
+    const photoControls = document.getElementById("photoControls");
+    const adjustBar = document.getElementById("adjustBar");
+    const compareBtn = document.getElementById("compareBtn");
+    const variantsGrid = document.getElementById("variantsGrid");
+    const aiAdviceBox = document.getElementById("aiAdviceBox");
+    const faceShapeBadge = document.getElementById("faceShapeBadge");
+    const matchBadge = document.getElementById("matchBadge");
+    const aiStatusBadge = document.getElementById("aiStatusBadge");
 
-      const state = {
-        hasPhoto: false,
-        sourceCanvas: document.createElement("canvas"),
-        faceBox: { cx: 360, cy: 430, rx: 165, ry: 215 },
-        offsetX: 0,
-        offsetY: 0,
-        scaleAdjust: 1.0,
-        faceShape: "oval",
-        styleId: "low_fade_crop",
-        beardId: "fade_beard",
-        hairColor: "natural_black",
-        showOriginal: false,
-        stream: null
-      };
-      state.sourceCanvas.width = 720;
-      state.sourceCanvas.height = 888;
+    // Preload real HD hair images with CORS enabled
+    function loadStyleImage(styleObj) {
+      if (imageCache[styleObj.id]) return Promise.resolve(imageCache[styleObj.id]);
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          imageCache[styleObj.id] = img;
+          resolve(img);
+        };
+        img.onerror = () => resolve(null);
+        img.src = styleObj.photo;
+      });
+    }
 
-      const videoEl = document.getElementById("cameraVideo");
-      const mainCanvas = document.getElementById("mainCanvas");
-      const ctx = mainCanvas.getContext("2d");
-      const emptyState = document.getElementById("emptyState");
-      const faceGuideOverlay = document.getElementById("faceGuideOverlay");
-      const cameraControls = document.getElementById("cameraControls");
-      const adjustBar = document.getElementById("adjustBar");
-      const canvasBadges = document.getElementById("canvasBadges");
-      const compareBtn = document.getElementById("compareBtn");
-      const variantsSection = document.getElementById("variantsSection");
-      const variantsGrid = document.getElementById("variantsGrid");
-      const aiAdviceBox = document.getElementById("aiAdviceBox");
-      const faceShapeBadge = document.getElementById("faceShapeBadge");
-      const matchBadge = document.getElementById("matchBadge");
-
-      // Render Beard & Hairstyle selectors
-      function renderSelectors() {
-        const beardWrap = document.getElementById("beardChips");
-        beardWrap.innerHTML = "";
-        BEARDS.forEach(b => {
-          const btn = document.createElement("button");
-          btn.type = "button";
-          btn.className = "chip" + (b.id === state.beardId ? " active" : "");
-          btn.textContent = b.name;
-          btn.onclick = () => {
-            state.beardId = b.id;
-            renderSelectors();
-            updateAllPreviews();
-            requestAiAdvice();
-          };
-          beardWrap.appendChild(btn);
+    // Load Google MediaPipe Face Landmarker in background for 478-point real 3D face detection
+    async function initMediaPipe() {
+      try {
+        const vision = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs");
+        const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+        );
+        state.faceLandmarker = await vision.FaceLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+          },
+          outputFaceBlendshapes: false,
+          runningMode: "IMAGE",
+          numFaces: 1
         });
-
-        const stylesWrap = document.getElementById("stylesGrid");
-        stylesWrap.innerHTML = "";
-        HAIRSTYLES.forEach(s => {
-          const card = document.createElement("div");
-          card.className = "style-card" + (s.id === state.styleId ? " active" : "");
-          const isRec = s.shapes.includes(state.faceShape);
-          card.innerHTML = `
-            <div>
-              <span class="style-badge">${isRec ? "✅ Yuzga mos • " : ""}${s.badge}</span>
-              <div class="style-name">${s.name}</div>
-              <div class="style-desc">${s.desc}</div>
-            </div>
-          `;
-          card.onclick = () => {
-            state.styleId = s.id;
-            renderSelectors();
-            updateAllPreviews();
-            requestAiAdvice();
-          };
-          stylesWrap.appendChild(card);
-        });
+        aiStatusBadge.textContent = "🧠 3D AI TAYYOR";
+      } catch (e) {
+        console.log("MediaPipe fallback to smart skin detector:", e);
       }
+    }
 
-      // Intelligent skin-tone face detector on sourceCanvas
-      function analyzeFaceFromCanvas(srcCanvas) {
-        const w = srcCanvas.width;
-        const h = srcCanvas.height;
-        const sctx = srcCanvas.getContext("2d");
-        const imgData = sctx.getImageData(0, 0, w, h).data;
+    function setViewMode(mode) {
+      state.viewMode = mode;
+      document.querySelectorAll(".mode-tab").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.mode === mode);
+      });
+      adjustBar.style.display = (mode === "blend" && state.hasUserPhoto) ? "flex" : "none";
+      renderMainStage();
+    }
 
-        let minX = w, maxX = 0, minY = h, maxY = 0, count = 0;
-        let sumX = 0, sumY = 0;
-        const startX = Math.floor(w * 0.16), endX = Math.floor(w * 0.84);
-        const startY = Math.floor(h * 0.14), endY = Math.floor(h * 0.82);
-
-        for (let y = startY; y < endY; y += 4) {
-          for (let x = startX; x < endX; x += 4) {
-            const idx = (y * w + x) * 4;
-            const r = imgData[idx], g = imgData[idx + 1], b = imgData[idx + 2];
-            // RGB + YCbCr skin detection heuristic
-            const maxC = Math.max(r, g, b), minC = Math.min(r, g, b);
-            const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
-            const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-            if (r > 75 && g > 40 && b > 20 && r > g && r > b && (maxC - minC) > 15 && cr >= 133 && cr <= 178 && cb >= 77 && cb <= 132) {
-              sumX += x;
-              sumY += y;
-              if (x < minX) minX = x;
-              if (x > maxX) maxX = x;
-              if (y < minY) minY = y;
-              if (y > maxY) maxY = y;
-              count++;
-            }
-          }
-        }
-
-        if (count > 220) {
-          const cx = Math.max(w * 0.35, Math.min(w * 0.65, sumX / count));
-          const cy = Math.max(h * 0.36, Math.min(h * 0.56, sumY / count));
-          const spanX = Math.max(w * 0.34, Math.min(w * 0.58, (maxX - minX) * 0.92));
-          const spanY = Math.max(h * 0.38, Math.min(h * 0.62, (maxY - minY) * 0.94));
-          const ratio = spanY / Math.max(1, spanX);
-
-          let detectedShape = "oval";
-          if (ratio > 1.34) detectedShape = "oblong";
-          else if (ratio < 1.12) detectedShape = "round";
-          else if (Math.abs((cx - minX) - (maxX - cx)) < 14) detectedShape = "square";
-          else detectedShape = "oval";
-
-          state.faceBox = {
-            cx: cx,
-            cy: cy,
-            rx: spanX * 0.50,
-            ry: spanY * 0.52
-          };
-          setFaceShape(detectedShape, false);
-        } else {
-          state.faceBox = { cx: w * 0.5, cy: h * 0.47, rx: w * 0.235, ry: h * 0.245 };
-        }
-      }
-
-      function setFaceShape(shape, triggerUpdate = true) {
-        state.faceShape = shape;
-        document.querySelectorAll("#faceShapeChips .chip").forEach(btn => {
-          btn.classList.toggle("active", btn.dataset.shape === shape);
-        });
-        const names = { oval: "Oval", square: "Kvadrat", round: "Dumaloq", diamond: "Olmos", oblong: "Uzunchoq" };
-        faceShapeBadge.textContent = "🧠 Yuz: " + (names[shape] || "Oval");
-        renderSelectors();
-        if (triggerUpdate) {
-          updateAllPreviews();
-          requestAiAdvice();
-        }
-      }
-
-      // Procedural high-detail hair strand & beard renderer
-      function renderHairAndBeardOnCanvas(targetCanvas, styleId, beardId, colorKey, showOrig) {
-        const w = targetCanvas.width;
-        const h = targetCanvas.height;
-        const tctx = targetCanvas.getContext("2d");
-        tctx.clearRect(0, 0, w, h);
-        tctx.drawImage(state.sourceCanvas, 0, 0, w, h);
-
-        if (showOrig) return;
-
-        const scaleX = w / 720;
-        const scaleY = h / 888;
-        const adjS = state.scaleAdjust;
-        const cx = (state.faceBox.cx + state.offsetX) * scaleX;
-        const cy = (state.faceBox.cy + state.offsetY) * scaleY;
-        const rx = state.faceBox.rx * scaleX * adjS;
-        const ry = state.faceBox.ry * scaleY * adjS;
-
-        const pal = COLOR_PALETTES[colorKey] || COLOR_PALETTES.natural_black;
-
-        tctx.save();
-
-        // 1. Subtle temple & forehead barbershop fade shadow
-        const fadeGradL = tctx.createRadialGradient(cx - rx * 0.92, cy - ry * 0.25, rx * 0.05, cx - rx * 0.85, cy - ry * 0.25, rx * 0.52);
-        fadeGradL.addColorStop(0, pal.skinShadow);
-        fadeGradL.addColorStop(1, "rgba(0,0,0,0)");
-        tctx.fillStyle = fadeGradL;
-        tctx.beginPath();
-        tctx.ellipse(cx - rx * 0.88, cy - ry * 0.22, rx * 0.32, ry * 0.52, -0.12, 0, Math.PI * 2);
-        tctx.fill();
-
-        const fadeGradR = tctx.createRadialGradient(cx + rx * 0.92, cy - ry * 0.25, rx * 0.05, cx + rx * 0.85, cy - ry * 0.25, rx * 0.52);
-        fadeGradR.addColorStop(0, pal.skinShadow);
-        fadeGradR.addColorStop(1, "rgba(0,0,0,0)");
-        tctx.fillStyle = fadeGradR;
-        tctx.beginPath();
-        tctx.ellipse(cx + rx * 0.88, cy - ry * 0.22, rx * 0.32, ry * 0.52, 0.12, 0, Math.PI * 2);
-        tctx.fill();
-
-        // 2. Main Hair Silhouette + Volumetric Gradient + Realistic Hair Strands
-        drawHairstyleLayer(tctx, cx, cy, rx, ry, styleId, pal);
-
-        // 3. Beard Layer if selected
-        if (beardId && beardId !== "none") {
-          drawBeardLayer(tctx, cx, cy, rx, ry, beardId, pal);
-        }
-
-        tctx.restore();
-      }
-
-      function drawHairstyleLayer(g, cx, cy, rx, ry, styleId, pal) {
-        const topY = cy - ry * 0.96;
-        const crownY = cy - ry * 1.34;
-
-        // Base gradient for realistic hair depth
-        const hairGrad = g.createLinearGradient(cx, crownY - ry * 0.25, cx, cy - ry * 0.2);
-        hairGrad.addColorStop(0, pal.hi);
-        hairGrad.addColorStop(0.45, pal.mid);
-        hairGrad.addColorStop(1, pal.base);
-
-        g.save();
-        g.shadowColor = "rgba(0,0,0,0.42)";
-        g.shadowBlur = rx * 0.09;
-        g.shadowOffsetY = ry * 0.03;
-
-        // Back mullet extension if modern_mullet
-        if (styleId === "modern_mullet") {
-          g.fillStyle = pal.base;
-          g.beginPath();
-          g.ellipse(cx - rx * 0.96, cy + ry * 0.28, rx * 0.22, ry * 0.42, 0.2, 0, Math.PI * 2);
-          g.ellipse(cx + rx * 0.96, cy + ry * 0.28, rx * 0.22, ry * 0.42, -0.2, 0, Math.PI * 2);
-          g.fill();
-        }
-
-        g.fillStyle = hairGrad;
-        g.beginPath();
-
-        if (styleId === "buzz_cut_fade") {
-          // Tight military buzz dome with sharp line-up forehead
-          g.moveTo(cx - rx * 0.92, cy - ry * 0.42);
-          g.quadraticCurveTo(cx - rx * 0.96, cy - ry * 1.15, cx, cy - ry * 1.20);
-          g.quadraticCurveTo(cx + rx * 0.96, cy - ry * 1.15, cx + rx * 0.92, cy - ry * 0.42);
-          g.lineTo(cx + rx * 0.80, cy - ry * 0.68);
-          g.quadraticCurveTo(cx, cy - ry * 0.74, cx - rx * 0.80, cy - ry * 0.68);
-          g.closePath();
-          g.globalAlpha = 0.86;
-          g.fill();
-          g.globalAlpha = 1;
-        } else if (styleId === "high_skin_fade_quiff" || styleId === "modern_pompadour") {
-          const lift = styleId === "modern_pompadour" ? 1.52 : 1.44;
-          g.moveTo(cx - rx * 0.86, cy - ry * 0.56);
-          g.bezierCurveTo(cx - rx * 0.94, cy - ry * 1.25, cx - rx * 0.45, cy - ry * lift, cx + rx * 0.08, cy - ry * (lift + 0.04));
-          g.bezierCurveTo(cx + rx * 0.65, cy - ry * lift, cx + rx * 0.92, cy - ry * 1.12, cx + rx * 0.86, cy - ry * 0.56);
-          g.quadraticCurveTo(cx + rx * 0.72, cy - ry * 0.76, cx, cy - ry * 0.78);
-          g.quadraticCurveTo(cx - rx * 0.72, cy - ry * 0.76, cx - rx * 0.86, cy - ry * 0.56);
-          g.closePath();
-          g.fill();
-        } else if (styleId === "classic_side_part") {
-          g.moveTo(cx - rx * 0.98, cy - ry * 0.34);
-          g.bezierCurveTo(cx - rx * 1.04, cy - ry * 1.18, cx - rx * 0.55, cy - ry * 1.38, cx, cy - ry * 1.36);
-          g.bezierCurveTo(cx + rx * 0.68, cy - ry * 1.38, cx + rx * 1.04, cy - ry * 1.12, cx + rx * 0.98, cy - ry * 0.34);
-          g.lineTo(cx + rx * 0.84, cy - ry * 0.62);
-          g.bezierCurveTo(cx + rx * 0.45, cy - ry * 0.82, cx - rx * 0.35, cy - ry * 0.68, cx - rx * 0.56, cy - ry * 0.82);
-          g.lineTo(cx - rx * 0.84, cy - ry * 0.60);
-          g.closePath();
-          g.fill();
-          // Hard razor side part line
-          g.strokeStyle = "rgba(245,230,179,0.45)";
-          g.lineWidth = Math.max(1.5, rx * 0.018);
-          g.beginPath();
-          g.moveTo(cx - rx * 0.54, cy - ry * 0.80);
-          g.lineTo(cx - rx * 0.68, cy - ry * 1.16);
-          g.stroke();
-        } else if (styleId === "french_crop" || styleId === "low_fade_crop") {
-          const fringeY = styleId === "french_crop" ? 0.58 : 0.65;
-          g.moveTo(cx - rx * 0.95, cy - ry * 0.44);
-          g.bezierCurveTo(cx - rx * 1.02, cy - ry * 1.18, cx - rx * 0.55, cy - ry * 1.34, cx, cy - ry * 1.34);
-          g.bezierCurveTo(cx + rx * 0.55, cy - ry * 1.34, cx + rx * 1.02, cy - ry * 1.18, cx + rx * 0.95, cy - ry * 0.44);
-          g.lineTo(cx + rx * 0.82, cy - ry * fringeY);
-          g.quadraticCurveTo(cx, cy - ry * (fringeY - 0.05), cx - rx * 0.82, cy - ry * fringeY);
-          g.closePath();
-          g.fill();
-        } else if (styleId === "textured_fringe") {
-          g.moveTo(cx - rx * 0.96, cy - ry * 0.40);
-          g.bezierCurveTo(cx - rx * 1.05, cy - ry * 1.22, cx - rx * 0.52, cy - ry * 1.38, cx, cy - ry * 1.38);
-          g.bezierCurveTo(cx + rx * 0.52, cy - ry * 1.38, cx + rx * 1.05, cy - ry * 1.22, cx + rx * 0.96, cy - ry * 0.40);
-          // Zig-zag messy fringe over forehead
-          const steps = 9;
-          for (let i = steps; i >= 0; i--) {
-            const t = i / steps;
-            const px = (cx - rx * 0.82) + t * (rx * 1.64);
-            const py = cy - ry * (i % 2 === 0 ? 0.50 : 0.63);
-            g.lineTo(px, py);
-          }
-          g.closePath();
-          g.fill();
-        } else if (styleId === "curly_taper") {
-          g.moveTo(cx - rx * 0.94, cy - ry * 0.48);
-          g.bezierCurveTo(cx - rx * 1.08, cy - ry * 1.25, cx - rx * 0.55, cy - ry * 1.44, cx, cy - ry * 1.44);
-          g.bezierCurveTo(cx + rx * 0.55, cy - ry * 1.44, cx + rx * 1.08, cy - ry * 1.25, cx + rx * 0.94, cy - ry * 0.48);
-          g.quadraticCurveTo(cx, cy - ry * 0.58, cx - rx * 0.94, cy - ry * 0.48);
-          g.closePath();
-          g.fill();
-          // Curly puffs
-          for (let i = 0; i < 26; i++) {
-            const ang = Math.PI + (i / 25) * Math.PI;
-            const radX = rx * (0.76 + (i % 3) * 0.08);
-            const radY = ry * (0.88 + (i % 2) * 0.12);
-            const px = cx + Math.cos(ang) * radX;
-            const py = (cy - ry * 0.45) + Math.sin(ang) * radY * 0.95;
-            g.fillStyle = i % 2 === 0 ? pal.mid : pal.base;
-            g.beginPath();
-            g.arc(px, py, rx * (0.14 + (i % 3) * 0.03), 0, Math.PI * 2);
-            g.fill();
-          }
-        } else {
-          // undercut_slick & modern_mullet top
-          g.moveTo(cx - rx * 0.88, cy - ry * 0.52);
-          g.bezierCurveTo(cx - rx * 0.96, cy - ry * 1.24, cx - rx * 0.50, cy - ry * 1.42, cx, cy - ry * 1.42);
-          g.bezierCurveTo(cx + rx * 0.50, cy - ry * 1.42, cx + rx * 0.96, cy - ry * 1.24, cx + rx * 0.88, cy - ry * 0.52);
-          g.quadraticCurveTo(cx, cy - ry * 0.72, cx - rx * 0.88, cy - ry * 0.52);
-          g.closePath();
-          g.fill();
-        }
-
-        // 3. Fine Hair Strand Highlights for Photorealistic Texture
-        g.shadowBlur = 0;
-        g.strokeStyle = pal.hi;
-        g.lineWidth = Math.max(1.1, rx * 0.012);
-        g.globalAlpha = 0.42;
-        const strandCount = styleId === "buzz_cut_fade" ? 18 : 42;
-        for (let i = 0; i < strandCount; i++) {
-          const t = (i / (strandCount - 1)) * 2 - 1; // -1 to 1
-          const sx = cx + t * rx * 0.78;
-          const sy = cy - ry * 0.68;
-          const ex = sx + (styleId === "classic_side_part" ? rx * 0.22 : t * rx * 0.12);
-          const ey = cy - ry * (styleId === "buzz_cut_fade" ? 1.05 : 1.28);
-          g.beginPath();
-          g.moveTo(sx, sy);
-          g.quadraticCurveTo((sx + ex) * 0.5, sy - ry * 0.35, ex, ey);
-          g.stroke();
-        }
-        g.restore();
-      }
-
-      function drawBeardLayer(g, cx, cy, rx, ry, beardId, pal) {
-        g.save();
-        const jawY = cy + ry * 0.22;
-        const chinY = cy + ry * 1.04;
-        const mouthY = cy + ry * 0.42;
-
-        if (beardId === "goatee") {
-          g.fillStyle = pal.base;
-          g.globalAlpha = 0.82;
-          // Mustache
-          g.beginPath();
-          g.moveTo(cx - rx * 0.36, mouthY);
-          g.quadraticCurveTo(cx, mouthY - ry * 0.12, cx + rx * 0.36, mouthY);
-          g.quadraticCurveTo(cx, mouthY - ry * 0.02, cx - rx * 0.36, mouthY);
-          g.fill();
-          // Chin goatee
-          g.beginPath();
-          g.ellipse(cx, cy + ry * 0.85, rx * 0.34, ry * 0.20, 0, 0, Math.PI * 2);
-          g.fill();
-          g.restore();
+    document.querySelectorAll(".mode-tab").forEach(btn => {
+      btn.onclick = () => {
+        const m = btn.dataset.mode;
+        if ((m === "split" || m === "blend") && !state.hasUserPhoto) {
+          startCamera();
           return;
         }
+        setViewMode(m);
+      };
+    });
 
-        const alpha = beardId === "stubble" ? 0.36 : (beardId === "fade_beard" ? 0.76 : 0.90);
-        const chinDrop = beardId === "full_beard" ? 1.15 : 1.04;
+    // Detect 478 3D face landmarks and classify exact face shape
+    function detectUserFaceAndShape() {
+      const uc = state.userCanvas;
+      const w = uc.width, h = uc.height;
 
-        const beardGrad = g.createLinearGradient(cx, jawY, cx, cy + ry * chinDrop);
-        beardGrad.addColorStop(0, beardId === "fade_beard" ? "rgba(18,19,24,0.12)" : pal.mid);
-        beardGrad.addColorStop(0.35, pal.base);
-        beardGrad.addColorStop(1, pal.base);
-
-        g.fillStyle = beardGrad;
-        g.globalAlpha = alpha;
-
-        // Outer jawline path + inner mouth cutout
-        g.beginPath();
-        g.moveTo(cx - rx * 0.95, cy - ry * 0.04);
-        g.quadraticCurveTo(cx - rx * 0.96, cy + ry * 0.75, cx, cy + ry * chinDrop);
-        g.quadraticCurveTo(cx + rx * 0.96, cy + ry * 0.75, cx + rx * 0.95, cy - ry * 0.04);
-        g.lineTo(cx + rx * 0.82, cy - ry * 0.04);
-        g.quadraticCurveTo(cx + rx * 0.68, cy + ry * 0.38, cx + rx * 0.38, mouthY);
-        g.quadraticCurveTo(cx, mouthY - ry * 0.10, cx - rx * 0.38, mouthY);
-        g.quadraticCurveTo(cx - rx * 0.68, cy + ry * 0.38, cx - rx * 0.82, cy - ry * 0.04);
-        g.closePath();
-        g.fill();
-
-        // Mouth opening cutout blend
-        g.globalCompositeOperation = "source-atop";
-        g.fillStyle = "rgba(220, 165, 145, 0.22)";
-        g.beginPath();
-        g.ellipse(cx, mouthY + ry * 0.12, rx * 0.26, ry * 0.09, 0, 0, Math.PI * 2);
-        g.fill();
-
-        g.restore();
-      }
-
-      // Draw a synthetic studio portrait for Demo Mode
-      function generateDemoPortrait() {
-        const sc = state.sourceCanvas;
-        const g = sc.getContext("2d");
-        const w = sc.width, h = sc.height;
-
-        const bg = g.createRadialGradient(w * 0.5, h * 0.4, 40, w * 0.5, h * 0.5, w * 0.8);
-        bg.addColorStop(0, "#1e2638");
-        bg.addColorStop(1, "#0b0e16");
-        g.fillStyle = bg;
-        g.fillRect(0, 0, w, h);
-
-        const cx = 360, cy = 440, rx = 162, ry = 212;
-        state.faceBox = { cx, cy, rx, ry };
-
-        // Shoulders & Suit
-        g.fillStyle = "#141824";
-        g.beginPath();
-        g.ellipse(cx, h * 0.96, rx * 2.1, ry * 0.95, 0, Math.PI, Math.PI * 2);
-        g.fill();
-
-        // Neck
-        g.fillStyle = "#c99778";
-        g.fillRect(cx - rx * 0.45, cy + ry * 0.65, rx * 0.9, ry * 0.75);
-
-        // Ears
-        g.fillStyle = "#d4a281";
-        g.beginPath();
-        g.ellipse(cx - rx * 0.98, cy, rx * 0.14, ry * 0.24, -0.1, 0, Math.PI * 2);
-        g.ellipse(cx + rx * 0.98, cy, rx * 0.14, ry * 0.24, 0.1, 0, Math.PI * 2);
-        g.fill();
-
-        // Face oval with realistic skin shading
-        const skin = g.createRadialGradient(cx - 20, cy - 30, 30, cx, cy, ry * 1.05);
-        skin.addColorStop(0, "#ecc1a1");
-        skin.addColorStop(0.7, "#dca986");
-        skin.addColorStop(1, "#be8967");
-        g.fillStyle = skin;
-        g.beginPath();
-        g.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-        g.fill();
-
-        // Eyebrows
-        g.strokeStyle = "#2b1d14";
-        g.lineWidth = 8;
-        g.lineCap = "round";
-        g.beginPath();
-        g.moveTo(cx - rx * 0.58, cy - ry * 0.22);
-        g.quadraticCurveTo(cx - rx * 0.36, cy - ry * 0.30, cx - rx * 0.16, cy - ry * 0.22);
-        g.moveTo(cx + rx * 0.16, cy - ry * 0.22);
-        g.quadraticCurveTo(cx + rx * 0.36, cy - ry * 0.30, cx + rx * 0.58, cy - ry * 0.22);
-        g.stroke();
-
-        // Eyes
-        [-0.36, 0.36].forEach(dir => {
-          const ex = cx + dir * rx;
-          const ey = cy - ry * 0.10;
-          g.fillStyle = "#ffffff";
-          g.beginPath();
-          g.ellipse(ex, ey, rx * 0.16, ry * 0.065, 0, 0, Math.PI * 2);
-          g.fill();
-          g.fillStyle = "#3b281c";
-          g.beginPath();
-          g.arc(ex, ey, rx * 0.065, 0, Math.PI * 2);
-          g.fill();
-          g.fillStyle = "#090b10";
-          g.beginPath();
-          g.arc(ex, ey, rx * 0.03, 0, Math.PI * 2);
-          g.fill();
-        });
-
-        // Nose
-        g.strokeStyle = "rgba(140, 92, 65, 0.55)";
-        g.lineWidth = 4;
-        g.beginPath();
-        g.moveTo(cx, cy - ry * 0.10);
-        g.lineTo(cx - 8, cy + ry * 0.22);
-        g.quadraticCurveTo(cx, cy + ry * 0.27, cx + 14, cy + ry * 0.22);
-        g.stroke();
-
-        // Lips
-        g.fillStyle = "#b56e5b";
-        g.beginPath();
-        g.ellipse(cx, cy + ry * 0.48, rx * 0.25, ry * 0.06, 0, 0, Math.PI * 2);
-        g.fill();
-
-        onPhotoReady();
-      }
-
-      function onPhotoReady() {
-        state.hasPhoto = true;
-        state.offsetX = 0;
-        state.offsetY = 0;
-        state.scaleAdjust = 1.0;
-
-        emptyState.style.display = "none";
-        videoEl.style.display = "none";
-        faceGuideOverlay.style.display = "none";
-        cameraControls.style.display = "none";
-        mainCanvas.style.display = "block";
-        canvasBadges.style.display = "flex";
-        compareBtn.style.display = "block";
-        adjustBar.style.display = "flex";
-        variantsSection.style.display = "block";
-
-        updateAllPreviews();
-        requestAiAdvice();
-      }
-
-      function updateAllPreviews() {
-        if (!state.hasPhoto) return;
-        renderHairAndBeardOnCanvas(mainCanvas, state.styleId, state.beardId, state.hairColor, state.showOriginal);
-
-        // Render 4 recommended variant thumbnails
-        const recommended = HAIRSTYLES.filter(s => s.shapes.includes(state.faceShape)).slice(0, 4);
-        if (!recommended.some(s => s.id === state.styleId)) {
-          const cur = HAIRSTYLES.find(s => s.id === state.styleId);
-          if (cur) recommended[3] = cur;
-        }
-
-        variantsGrid.innerHTML = "";
-        recommended.forEach(s => {
-          const item = document.createElement("div");
-          item.className = "variant-item" + (s.id === state.styleId ? " active" : "");
-          const vc = document.createElement("canvas");
-          vc.width = 200;
-          vc.height = 240;
-          renderHairAndBeardOnCanvas(vc, s.id, state.beardId, state.hairColor, false);
-
-          const lbl = document.createElement("div");
-          lbl.className = "variant-label";
-          lbl.textContent = s.name;
-
-          item.appendChild(vc);
-          item.appendChild(lbl);
-          item.onclick = () => {
-            state.styleId = s.id;
-            renderSelectors();
-            updateAllPreviews();
-            requestAiAdvice();
-          };
-          variantsGrid.appendChild(item);
-        });
-      }
-
-      async function requestAiAdvice() {
+      if (state.faceLandmarker) {
         try {
-          const resp = await fetch("/webapp/api/generate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              style_id: state.styleId,
-              beard_id: state.beardId,
-              face_shape: state.faceShape,
-              hair_color: state.hairColor
-            })
-          });
-          const data = await resp.json();
-          if (data && data.ok) {
-            matchBadge.textContent = "🔥 " + data.match_score + "% Mos";
-            aiAdviceBox.innerHTML = "🤖 <b>AI Stilist tahlili:</b> " + data.ai_advice;
+          const res = state.faceLandmarker.detect(uc);
+          if (res && res.faceLandmarks && res.faceLandmarks.length > 0) {
+            const lm = res.faceLandmarks[0];
+            state.userLandmarks = lm;
+            // Key MediaPipe indices: 10 (top forehead), 152 (chin), 234 (left cheekbone), 454 (right cheekbone), 172 (left jaw), 397 (right jaw), 103 (left forehead), 332 (right forehead)
+            const top = lm[10], chin = lm[152], leftCheek = lm[234], rightCheek = lm[454];
+            const leftJaw = lm[172], rightJaw = lm[397], leftFore = lm[103], rightFore = lm[332];
+
+            const faceW = Math.hypot((rightCheek.x - leftCheek.x) * w, (rightCheek.y - leftCheek.y) * h);
+            const faceH = Math.hypot((chin.x - top.x) * w, (chin.y - top.y) * h);
+            const jawW = Math.hypot((rightJaw.x - leftJaw.x) * w, (rightJaw.y - leftJaw.y) * h);
+            const foreW = Math.hypot((rightFore.x - leftFore.x) * w, (rightFore.y - leftFore.y) * h);
+
+            const cx = ((leftCheek.x + rightCheek.x) * 0.5) * w;
+            const cy = ((top.y + chin.y) * 0.5) * h;
+
+            state.faceBox = {
+              cx: cx,
+              cy: cy,
+              rx: faceW * 0.54,
+              ry: faceH * 0.55,
+              foreheadY: top.y * h
+            };
+
+            const ratio = faceH / Math.max(1, faceW);
+            const jawRatio = jawW / Math.max(1, faceW);
+            let shape = "oval";
+            if (ratio > 1.38) shape = "oblong";
+            else if (ratio < 1.15 && jawRatio < 0.82) shape = "round";
+            else if (jawRatio >= 0.84) shape = "square";
+            else if (faceW > foreW * 1.16 && faceW > jawW * 1.18) shape = "diamond";
+            else shape = "oval";
+
+            setFaceShape(shape, false);
+            return;
           }
         } catch (err) {}
       }
 
-      // Camera handling
-      async function startCamera() {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 888 } },
-            audio: false
-          });
-          state.stream = stream;
-          videoEl.srcObject = stream;
-          emptyState.style.display = "none";
-          mainCanvas.style.display = "none";
-          videoEl.style.display = "block";
-          faceGuideOverlay.style.display = "flex";
-          cameraControls.style.display = "flex";
-          adjustBar.style.display = "none";
-        } catch (err) {
-          alert("Kameraga ruxsat berilmadi yoki qurilmada kamera topilmadi. «Rasm yuklash» tugmasidan foydalaning.");
-        }
+      // Fallback heuristic if MediaPipe still loading
+      state.faceBox = { cx: w * 0.5, cy: h * 0.48, rx: w * 0.24, ry: h * 0.26, foreheadY: h * 0.25 };
+    }
+
+    function drawImageCover(g, img, dx, dy, dw, dh) {
+      const iw = img.width || 720, ih = img.height || 864;
+      const targetRatio = dw / dh;
+      const imgRatio = iw / ih;
+      let sx = 0, sy = 0, sw = iw, sh = ih;
+      if (imgRatio > targetRatio) {
+        sw = ih * targetRatio;
+        sx = (iw - sw) / 2;
+      } else {
+        sh = iw / targetRatio;
+        sy = (ih - sh) / 2;
+      }
+      g.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+    }
+
+    function applyColorFilter(g, colorKey) {
+      if (colorKey === "dark_brown") g.filter = "sepia(0.28) saturate(1.35) brightness(0.96)";
+      else if (colorKey === "warm_chestnut") g.filter = "sepia(0.45) saturate(1.55) brightness(1.04)";
+      else if (colorKey === "ash_graphite") g.filter = "saturate(0.25) contrast(1.08) brightness(1.06)";
+      else g.filter = "none";
+    }
+
+    async function renderMainStage() {
+      const w = mainCanvas.width, h = mainCanvas.height;
+      const stObj = HAIRSTYLES.find(s => s.id === state.styleId) || HAIRSTYLES[0];
+      const styleImg = await loadStyleImage(stObj);
+
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+
+      if (state.showOriginal && state.hasUserPhoto) {
+        ctx.drawImage(state.userCanvas, 0, 0, w, h);
+        drawStageFooter(ctx, w, h, "Sizning asl suratingiz", "");
+        ctx.restore();
+        return;
       }
 
-      function stopCamera() {
-        if (state.stream) {
-          state.stream.getTracks().forEach(t => t.stop());
-          state.stream = null;
+      // MODE 1: 4K Real Model Portrait
+      if (!state.hasUserPhoto || state.viewMode === "model") {
+        if (styleImg) {
+          applyColorFilter(ctx, state.hairColor);
+          drawImageCover(ctx, styleImg, 0, 0, w, h);
+          ctx.filter = "none";
         }
+        drawStageFooter(
+          ctx,
+          w,
+          h,
+          stObj.name,
+          state.hasUserPhoto
+            ? "Jonli 4K namuna • «🔀 Yuzim + Jonli Stil» tabiga o'tib o'zingiz bilan solishtiring"
+            : "📷 O'z yuzingizda sinash uchun pastdagi «Kamera (Selfi)» tugmasini bosing"
+        );
+        ctx.restore();
+        return;
       }
 
-      document.getElementById("startCameraBtn").onclick = startCamera;
+      // MODE 2: Side-by-Side Split Studio Comparison (User Face + Real HD Hairstyle Model)
+      if (state.viewMode === "split") {
+        const halfW = w / 2;
+        // Left side: User's real face photo
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, halfW, h);
+        ctx.clip();
+        drawImageCover(ctx, state.userCanvas, 0, 0, halfW, h);
 
-      document.getElementById("cancelCameraBtn").onclick = () => {
-        stopCamera();
-        videoEl.style.display = "none";
-        faceGuideOverlay.style.display = "none";
-        cameraControls.style.display = "none";
-        if (state.hasPhoto) {
-          mainCanvas.style.display = "block";
-          adjustBar.style.display = "flex";
-        } else {
-          emptyState.style.display = "block";
+        // Subtle face oval guide on user's face
+        ctx.strokeStyle = "rgba(212, 175, 55, 0.55)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.ellipse(halfW * 0.5, h * 0.47, halfW * 0.34, h * 0.25, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        // Right side: Real HD Hairstyle Reference Photo
+        if (styleImg) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(halfW, 0, halfW, h);
+          ctx.clip();
+          applyColorFilter(ctx, state.hairColor);
+          drawImageCover(ctx, styleImg, halfW, 0, halfW, h);
+          ctx.filter = "none";
+          ctx.restore();
         }
-      };
 
-      document.getElementById("capturePhotoBtn").onclick = () => {
-        const sc = state.sourceCanvas;
-        const sctx = sc.getContext("2d");
-        const vw = videoEl.videoWidth || 720;
-        const vh = videoEl.videoHeight || 888;
-        const targetRatio = sc.width / sc.height;
-        const videoRatio = vw / vh;
-        let sx = 0, sy = 0, sw = vw, sh = vh;
-        if (videoRatio > targetRatio) {
-          sw = vh * targetRatio;
-          sx = (vw - sw) / 2;
-        } else {
-          sh = vw / targetRatio;
-          sy = (vh - sh) / 2;
-        }
-        sctx.save();
-        sctx.translate(sc.width, 0);
-        sctx.scale(-1, 1);
-        sctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, sc.width, sc.height);
-        sctx.restore();
-        stopCamera();
-        analyzeFaceFromCanvas(sc);
-        onPhotoReady();
-      };
+        // Gold center divider line
+        ctx.strokeStyle = "#d4af37";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(halfW, 0);
+        ctx.lineTo(halfW, h);
+        ctx.stroke();
 
-      // Gallery image upload
-      document.getElementById("fileInput").onchange = (ev) => {
-        const file = ev.target.files && ev.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const img = new Image();
-          img.onload = () => {
-            const sc = state.sourceCanvas;
-            const sctx = sc.getContext("2d");
-            const targetRatio = sc.width / sc.height;
-            const imgRatio = img.width / img.height;
-            let sx = 0, sy = 0, sw = img.width, sh = img.height;
-            if (imgRatio > targetRatio) {
-              sw = img.height * targetRatio;
-              sx = (img.width - sw) / 2;
-            } else {
-              sh = img.width / targetRatio;
-              sy = (img.height - sh) / 2;
-            }
-            sctx.drawImage(img, sx, sy, sw, sh, 0, 0, sc.width, sc.height);
-            analyzeFaceFromCanvas(sc);
-            onPhotoReady();
-          };
-          img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-      };
+        // Labels on both sides
+        ctx.fillStyle = "rgba(9, 11, 16, 0.82)";
+        ctx.fillRect(12, 54, 130, 28);
+        ctx.fillRect(halfW + 12, 54, 165, 28);
+        ctx.fillStyle = "#f5e6b3";
+        ctx.font = "bold 18px sans-serif";
+        ctx.fillText("👤 Sizning yuzingiz", 20, 74);
+        ctx.fillText("💈 " + stObj.name, halfW + 20, 74);
 
-      document.getElementById("demoFaceBtn").onclick = generateDemoPortrait;
+        drawStageFooter(ctx, w, h, stObj.name + " • Yuzingizga moslik tahlili", stObj.desc);
+        ctx.restore();
+        return;
+      }
 
-      document.getElementById("retakeBtn").onclick = () => {
-        state.hasPhoto = false;
-        mainCanvas.style.display = "none";
-        canvasBadges.style.display = "none";
-        compareBtn.style.display = "none";
-        adjustBar.style.display = "none";
-        variantsSection.style.display = "none";
-        emptyState.style.display = "block";
-      };
+      // MODE 3: Photorealistic AI Hair Blend onto User's Photo ("Yuzimga Kiygizish")
+      ctx.drawImage(state.userCanvas, 0, 0, w, h);
 
-      document.getElementById("downloadBtn").onclick = () => {
-        if (!state.hasPhoto) return;
-        const link = document.createElement("a");
-        link.download = "jasur_barber_ai_" + state.styleId + ".png";
-        link.href = mainCanvas.toDataURL("image/png");
-        link.click();
-      };
+      if (styleImg) {
+        // Extract real hair crown & temples from the studio model photo using feathered alpha mask
+        const off = document.createElement("canvas");
+        off.width = 500;
+        off.height = 500;
+        const octx = off.getContext("2d");
 
-      // Before / After comparison button
-      compareBtn.onmousedown = compareBtn.ontouchstart = (e) => {
-        e.preventDefault();
-        state.showOriginal = true;
-        updateAllPreviews();
-      };
-      window.addEventListener("mouseup", () => {
-        if (state.showOriginal) {
-          state.showOriginal = false;
-          updateAllPreviews();
-        }
-      });
-      window.addEventListener("touchend", () => {
-        if (state.showOriginal) {
-          state.showOriginal = false;
-          updateAllPreviews();
-        }
-      });
+        applyColorFilter(octx, state.hairColor);
+        drawImageCover(octx, styleImg, 0, 0, 500, 500);
+        octx.filter = "none";
 
-      // Fine adjustment controls
-      document.querySelectorAll(".mini-ctrl").forEach(btn => {
+        // Keep only the upper hair/crown horseshoe region with soft feathered edges
+        octx.globalCompositeOperation = "destination-in";
+        const maskGrad = octx.createRadialGradient(250, 145, 55, 250, 160, 175);
+        maskGrad.addColorStop(0, "rgba(0,0,0,1)");
+        maskGrad.addColorStop(0.68, "rgba(0,0,0,0.92)");
+        maskGrad.addColorStop(0.88, "rgba(0,0,0,0.35)");
+        maskGrad.addColorStop(1, "rgba(0,0,0,0)");
+        octx.fillStyle = maskGrad;
+        octx.fillRect(0, 0, 500, 500);
+
+        // Softly erase the model's inner forehead/eyes so the user's real face shines through 100%
+        octx.globalCompositeOperation = "destination-out";
+        const faceCut = octx.createRadialGradient(250, 275, 45, 250, 265, 128);
+        faceCut.addColorStop(0, "rgba(0,0,0,1)");
+        faceCut.addColorStop(0.68, "rgba(0,0,0,0.95)");
+        faceCut.addColorStop(1, "rgba(0,0,0,0)");
+        octx.fillStyle = faceCut;
+        octx.beginPath();
+        octx.ellipse(250, 285, 118, 145, 0, 0, Math.PI * 2);
+        octx.fill();
+
+        // Position aligned to user's MediaPipe forehead & head width
+        const fb = state.faceBox;
+        const targetW = fb.rx * 3.55 * state.scaleAdjust;
+        const targetH = fb.ry * 2.95 * state.scaleAdjust;
+        const destX = fb.cx - targetW * 0.5 + state.offsetX;
+        const destY = (fb.foreheadY || (fb.cy - fb.ry * 0.82)) - targetH * 0.43 + state.offsetY;
+
+        ctx.drawImage(off, destX, destY, targetW, targetH);
+      }
+
+      drawStageFooter(ctx, w, h, stObj.name + " (Yuzingizda)", "Pastdagi ↑ ↓ ← → − + tugmalar bilan sochni aniq moslang");
+      ctx.restore();
+    }
+
+    function drawStageFooter(g, w, h, title, subtitle) {
+      const grad = g.createLinearGradient(0, h - 125, 0, h);
+      grad.addColorStop(0, "rgba(8, 10, 15, 0)");
+      grad.addColorStop(0.55, "rgba(8, 10, 15, 0.82)");
+      grad.addColorStop(1, "rgba(8, 10, 15, 0.96)");
+      g.fillStyle = grad;
+      g.fillRect(0, h - 125, w, 125);
+
+      g.fillStyle = "#f5e6b3";
+      g.font = "bold 23px sans-serif";
+      g.fillText("💈 " + title, 20, h - 46);
+
+      if (subtitle) {
+        g.fillStyle = "#cbd5e1";
+        g.font = "16px sans-serif";
+        g.fillText(subtitle, 20, h - 20);
+      }
+    }
+
+    function renderSelectors() {
+      const beardWrap = document.getElementById("beardChips");
+      beardWrap.innerHTML = "";
+      BEARDS.forEach(b => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "chip" + (b.id === state.beardId ? " active" : "");
+        btn.textContent = b.name;
         btn.onclick = () => {
-          const act = btn.dataset.adj;
-          if (act === "up") state.offsetY -= 8;
-          if (act === "down") state.offsetY += 8;
-          if (act === "smaller") state.scaleAdjust = Math.max(0.75, state.scaleAdjust - 0.04);
-          if (act === "larger") state.scaleAdjust = Math.min(1.30, state.scaleAdjust + 0.04);
-          updateAllPreviews();
-        };
-      });
-
-      // Face shape chip clicks
-      document.querySelectorAll("#faceShapeChips .chip").forEach(btn => {
-        btn.onclick = () => setFaceShape(btn.dataset.shape, true);
-      });
-
-      // Hair color clicks
-      document.querySelectorAll("#colorSwatches .color-swatch").forEach(sw => {
-        sw.onclick = () => {
-          state.hairColor = sw.dataset.color;
-          document.querySelectorAll("#colorSwatches .color-swatch").forEach(el => {
-            el.classList.toggle("active", el.dataset.color === state.hairColor);
-          });
-          updateAllPreviews();
+          state.beardId = b.id;
+          renderSelectors();
           requestAiAdvice();
         };
+        beardWrap.appendChild(btn);
       });
 
-      // Book with selected style CTA
-      document.getElementById("bookWithStyleBtn").onclick = () => {
-        const stObj = HAIRSTYLES.find(s => s.id === state.styleId) || HAIRSTYLES[0];
-        const bdObj = BEARDS.find(b => b.id === state.beardId) || BEARDS[0];
-        const payload = JSON.stringify({
-          action: "book_ai_style",
-          style_id: stObj.id,
-          style_name: stObj.name,
-          beard_name: bdObj.name,
-          face_shape: state.faceShape
-        });
+      const stylesWrap = document.getElementById("stylesGrid");
+      stylesWrap.innerHTML = "";
+      HAIRSTYLES.forEach(s => {
+        const card = document.createElement("div");
+        card.className = "style-card" + (s.id === state.styleId ? " active" : "");
+        const isRec = s.shapes.includes(state.faceShape);
+        card.innerHTML = `
+          <div class="style-thumb-wrap">
+            <img src="${s.photo}" alt="${s.name}" loading="lazy" crossorigin="anonymous">
+            <span class="style-badge-float">${isRec ? "✅ Yuzga mos • " : ""}${s.badge}</span>
+          </div>
+          <div class="style-info">
+            <div class="style-name">${s.name}</div>
+            <div class="style-desc">${s.desc}</div>
+          </div>
+        `;
+        card.onclick = () => {
+          state.styleId = s.id;
+          renderSelectors();
+          renderVariantsBar();
+          renderMainStage();
+          requestAiAdvice();
+        };
+        stylesWrap.appendChild(card);
+      });
+    }
 
-        if (tg && tg.sendData) {
-          try {
-            tg.sendData(payload);
-          } catch (e) {}
-        }
-        if (tg && tg.close) {
-          setTimeout(() => { try { tg.close(); } catch (e) {} }, 180);
-        } else {
-          alert("Tanlangan uslub: " + stObj.name + " (" + bdObj.name + "). Botga qaytib «💈 Navbatga yozilish» tugmasini bosing!");
-        }
-      };
+    function renderVariantsBar() {
+      const recommended = HAIRSTYLES.filter(s => s.shapes.includes(state.faceShape)).slice(0, 4);
+      if (!recommended.some(s => s.id === state.styleId)) {
+        const cur = HAIRSTYLES.find(s => s.id === state.styleId);
+        if (cur) recommended[3] = cur;
+      }
 
+      variantsGrid.innerHTML = "";
+      recommended.forEach(s => {
+        const item = document.createElement("div");
+        item.className = "variant-item" + (s.id === state.styleId ? " active" : "");
+        item.innerHTML = `
+          <img src="${s.photo}" alt="${s.name}" crossorigin="anonymous">
+          <div class="variant-label">${s.name}</div>
+        `;
+        item.onclick = () => {
+          state.styleId = s.id;
+          renderSelectors();
+          renderVariantsBar();
+          renderMainStage();
+          requestAiAdvice();
+        };
+        variantsGrid.appendChild(item);
+      });
+    }
+
+    function setFaceShape(shape, triggerUpdate = true) {
+      state.faceShape = shape;
+      document.querySelectorAll("#faceShapeChips .chip").forEach(btn => {
+        btn.classList.toggle("active", btn.dataset.shape === shape);
+      });
+      const names = { oval: "Oval", square: "Kvadrat", round: "Dumaloq", diamond: "Olmos", oblong: "Uzunchoq" };
+      faceShapeBadge.textContent = "🧠 Yuz: " + (names[shape] || "Oval");
       renderSelectors();
-    })();
+      renderVariantsBar();
+      if (triggerUpdate) {
+        renderMainStage();
+        requestAiAdvice();
+      }
+    }
+
+    async function requestAiAdvice() {
+      try {
+        const resp = await fetch("/webapp/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            style_id: state.styleId,
+            beard_id: state.beardId,
+            face_shape: state.faceShape,
+            hair_color: state.hairColor
+          })
+        });
+        const data = await resp.json();
+        if (data && data.ok) {
+          matchBadge.textContent = "🔥 " + data.match_score + "% Mos";
+          aiAdviceBox.innerHTML = "🤖 <b>AI Stilist tahlili:</b> " + data.ai_advice;
+        }
+      } catch (err) {}
+    }
+
+    // Camera handling
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 864 } },
+          audio: false
+        });
+        state.stream = stream;
+        videoEl.srcObject = stream;
+        mainCanvas.style.display = "none";
+        videoEl.style.display = "block";
+        faceGuideOverlay.style.display = "flex";
+        cameraControls.style.display = "flex";
+        photoControls.style.display = "none";
+        adjustBar.style.display = "none";
+      } catch (err) {
+        alert("Kameraga ruxsat berilmadi. «🖼 Galereyadan rasm» tugmasi orqali rasmingizni tanlang.");
+      }
+    }
+
+    function stopCamera() {
+      if (state.stream) {
+        state.stream.getTracks().forEach(t => t.stop());
+        state.stream = null;
+      }
+    }
+
+    function onUserPhotoLoaded() {
+      state.hasUserPhoto = true;
+      state.offsetX = 0;
+      state.offsetY = 0;
+      state.scaleAdjust = 1.0;
+
+      videoEl.style.display = "none";
+      faceGuideOverlay.style.display = "none";
+      cameraControls.style.display = "none";
+      photoControls.style.display = "flex";
+      mainCanvas.style.display = "block";
+
+      detectUserFaceAndShape();
+      // Default to Split Comparison mode so user sees both their real face and the real HD haircut clearly
+      setViewMode("split");
+      requestAiAdvice();
+    }
+
+    document.getElementById("startCameraBtn").onclick = startCamera;
+
+    document.getElementById("cancelCameraBtn").onclick = () => {
+      stopCamera();
+      videoEl.style.display = "none";
+      faceGuideOverlay.style.display = "none";
+      cameraControls.style.display = "none";
+      photoControls.style.display = "flex";
+      mainCanvas.style.display = "block";
+      renderMainStage();
+    };
+
+    document.getElementById("capturePhotoBtn").onclick = () => {
+      const uc = state.userCanvas;
+      const uctx = uc.getContext("2d");
+      const vw = videoEl.videoWidth || 720;
+      const vh = videoEl.videoHeight || 864;
+      const targetRatio = uc.width / uc.height;
+      const videoRatio = vw / vh;
+      let sx = 0, sy = 0, sw = vw, sh = vh;
+      if (videoRatio > targetRatio) {
+        sw = vh * targetRatio;
+        sx = (vw - sw) / 2;
+      } else {
+        sh = vw / targetRatio;
+        sy = (vh - sh) / 2;
+      }
+      uctx.save();
+      uctx.translate(uc.width, 0);
+      uctx.scale(-1, 1);
+      uctx.drawImage(videoEl, sx, sy, sw, sh, 0, 0, uc.width, uc.height);
+      uctx.restore();
+      stopCamera();
+      onUserPhotoLoaded();
+    };
+
+    document.getElementById("fileInput").onchange = (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const uc = state.userCanvas;
+          const uctx = uc.getContext("2d");
+          drawImageCover(uctx, img, 0, 0, uc.width, uc.height);
+          onUserPhotoLoaded();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    document.getElementById("downloadBtn").onclick = () => {
+      const link = document.createElement("a");
+      link.download = "jasur_barber_ai_" + state.styleId + ".png";
+      link.href = mainCanvas.toDataURL("image/png");
+      link.click();
+    };
+
+    compareBtn.onmousedown = compareBtn.ontouchstart = (e) => {
+      e.preventDefault();
+      state.showOriginal = true;
+      renderMainStage();
+    };
+    window.addEventListener("mouseup", () => {
+      if (state.showOriginal) {
+        state.showOriginal = false;
+        renderMainStage();
+      }
+    });
+    window.addEventListener("touchend", () => {
+      if (state.showOriginal) {
+        state.showOriginal = false;
+        renderMainStage();
+      }
+    });
+
+    document.querySelectorAll(".mini-ctrl").forEach(btn => {
+      btn.onclick = () => {
+        const act = btn.dataset.adj;
+        if (act === "up") state.offsetY -= 10;
+        if (act === "down") state.offsetY += 10;
+        if (act === "left") state.offsetX -= 10;
+        if (act === "right") state.offsetX += 10;
+        if (act === "smaller") state.scaleAdjust = Math.max(0.70, state.scaleAdjust - 0.05);
+        if (act === "larger") state.scaleAdjust = Math.min(1.40, state.scaleAdjust + 0.05);
+        renderMainStage();
+      };
+    });
+
+    document.querySelectorAll("#faceShapeChips .chip").forEach(btn => {
+      btn.onclick = () => setFaceShape(btn.dataset.shape, true);
+    });
+
+    document.querySelectorAll("#colorSwatches .color-swatch").forEach(sw => {
+      sw.onclick = () => {
+        state.hairColor = sw.dataset.color;
+        document.querySelectorAll("#colorSwatches .color-swatch").forEach(el => {
+          el.classList.toggle("active", el.dataset.color === state.hairColor);
+        });
+        renderMainStage();
+        requestAiAdvice();
+      };
+    });
+
+    document.getElementById("bookWithStyleBtn").onclick = () => {
+      const stObj = HAIRSTYLES.find(s => s.id === state.styleId) || HAIRSTYLES[0];
+      const bdObj = BEARDS.find(b => b.id === state.beardId) || BEARDS[0];
+      const payload = JSON.stringify({
+        action: "book_ai_style",
+        style_id: stObj.id,
+        style_name: stObj.name,
+        beard_name: bdObj.name,
+        face_shape: state.faceShape
+      });
+
+      if (tg && tg.sendData) {
+        try {
+          tg.sendData(payload);
+        } catch (e) {}
+      }
+      if (tg && tg.close) {
+        setTimeout(() => { try { tg.close(); } catch (e) {} }, 180);
+      } else {
+        alert("Tanlangan uslub: " + stObj.name + " (" + bdObj.name + "). Botga qaytib navbatga yozilishingiz mumkin!");
+      }
+    };
+
+    // Initial render with real 4K studio photos immediately visible
+    renderSelectors();
+    renderVariantsBar();
+    renderMainStage();
+    requestAiAdvice();
+    initMediaPipe();
   </script>
 </body>
 </html>
