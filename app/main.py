@@ -6,7 +6,7 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import BotCommand, MenuButtonCommands
+from aiogram.types import BotCommand, MenuButtonCommands, MenuButtonWebApp, WebAppInfo
 from aiohttp import web
 
 from app.config import settings
@@ -60,13 +60,20 @@ def build_dispatcher() -> Dispatcher:
 
 async def setup_bot_commands(bot: Bot) -> None:
     try:
+        webapp_url = f"{(settings.SITE_BASE_URL or 'https://barbershop-bot-site.onrender.com').strip().rstrip('/')}/webapp"
         await bot.set_my_commands([
             BotCommand(command="start", description="Botni ishga tushirish / Перезапустить"),
+            BotCommand(command="ai", description="✨ AI Soch & Soqol Tanlash (Web App)"),
             BotCommand(command="menu", description="Boshqaruv menyusi / Главное меню"),
             BotCommand(command="admin", description="Katta barber sayt boshqaruvi"),
         ])
-        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        logger.info("Bot commands and menu button configured successfully")
+        await bot.set_chat_menu_button(
+            menu_button=MenuButtonWebApp(
+                text="✨ AI Soch",
+                web_app=WebAppInfo(url=webapp_url),
+            )
+        )
+        logger.info("Bot commands and AI WebApp menu button configured successfully")
     except Exception as exc:
         logger.warning("Failed to configure bot commands or menu button: %s", exc)
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 
 from app.config import settings
 from app.i18n import t
@@ -14,7 +14,13 @@ if TYPE_CHECKING:
     from app.models.service import Service
 
 
+def _get_webapp_url() -> str:
+    base = (settings.SITE_BASE_URL or "https://barbershop-bot-site.onrender.com").strip().rstrip("/")
+    return f"{base}/webapp"
+
+
 def get_client_main_menu(lang: str = "uz") -> ReplyKeyboardMarkup:
+    webapp_url = _get_webapp_url()
     buttons = [
         [
             kbtn(menu_label("client.menu_join", lang), icon="barbershop", style="success"),
@@ -23,6 +29,14 @@ def get_client_main_menu(lang: str = "uz") -> ReplyKeyboardMarkup:
         [
             kbtn(menu_label("client.menu_history", lang), icon="history"),
             kbtn(menu_label("client.menu_lang", lang), icon="lang"),
+        ],
+        [
+            kbtn(
+                menu_label("client.menu_ai_stylist", lang),
+                icon="zap",
+                style="primary",
+                web_app=WebAppInfo(url=webapp_url),
+            ),
         ],
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
@@ -33,10 +47,19 @@ get_client_main_keyboard = get_client_main_menu
 
 
 def get_client_inline_menu(lang: str = "uz") -> InlineKeyboardMarkup:
+    webapp_url = _get_webapp_url()
     buttons = [
         [
             btn(t("client.menu_join", lang=lang), "c_menu:join", icon="barbershop", style="success"),
             btn(t("client.menu_my_queue", lang=lang), "c_menu:my_queue", icon="ticket"),
+        ],
+        [
+            btn(
+                t("client.menu_ai_stylist", lang=lang),
+                web_app=WebAppInfo(url=webapp_url),
+                icon="zap",
+                style="primary",
+            ),
         ],
         [
             btn(t("client.menu_history", lang=lang), "c_menu:history", icon="history"),
@@ -272,3 +295,19 @@ def get_receipt_cancel_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [btn(text=t("common.cancel_btn", lang=lang), callback_data="tr_cancel", icon="cross")],
     ])
+
+
+def get_ai_stylist_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    webapp_url = _get_webapp_url()
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            btn(
+                text=t("client.menu_ai_stylist", lang=lang),
+                web_app=WebAppInfo(url=webapp_url),
+                icon="zap",
+                style="primary",
+            )
+        ],
+        [btn(text=t("common.btn_back_main", lang=lang), callback_data="back_to_main_menu", icon="home")],
+    ])
+
